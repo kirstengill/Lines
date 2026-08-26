@@ -1,0 +1,342 @@
+/**
+ * Standard REST API Client for Sunrise Capital DS Platform
+ * Integrates with Supabase & Server Backend as Single Source of Truth
+ */
+
+import {
+  UserProfile,
+  WalletState,
+  Transaction,
+  Machine,
+  AdminTask,
+  AppNotification,
+  AdminUserSummary,
+  BalanceAdjustment,
+} from '../types';
+
+export interface ApiResponse<T = any> {
+  data?: T;
+  error?: string;
+  status: number;
+}
+
+class ApiClient {
+  private token: string | null = null;
+  private userId: string | null = null;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      try {
+        this.token = sessionStorage.getItem('sunrise_api_token') || localStorage.getItem('sunrise_api_token');
+        this.userId = sessionStorage.getItem('sunrise_user_id') || localStorage.getItem('sunrise_user_id');
+      } catch {
+        // Safe fallback
+      }
+    }
+  }
+
+  public setSession(token: string | null, userId: string | null) {
+    this.token = token;
+    this.userId = userId;
+    if (typeof window !== 'undefined') {
+      try {
+        if (token) {
+          sessionStorage.setItem('sunrise_api_token', token);
+          localStorage.setItem('sunrise_api_token', token);
+        } else {
+          sessionStorage.removeItem('sunrise_api_token');
+          localStorage.removeItem('sunrise_api_token');
+        }
+
+        if (userId) {
+          sessionStorage.setItem('sunrise_user_id', userId);
+          localStorage.setItem('sunrise_user_id', userId);
+        } else {
+          sessionStorage.removeItem('sunrise_user_id');
+          localStorage.removeItem('sunrise_user_id');
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+  }
+
+  public getToken(): string | null {
+    return this.token;
+  }
+
+  public getUserId(): string | null {
+    return this.userId;
+  }
+
+  private getHeaders(): HeadersInit {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.userId) {
+      headers['x-user-id'] = this.userId;
+    }
+    return headers;
+  }
+
+  public async request<T = any>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<{ data?: T; error?: string; isAdmin?: boolean; isBlocked?: boolean; [key: string]: any }> {
+    try {
+      const res = await fetch(endpoint, {
+        ...options,
+        headers: {
+          ...this.getHeaders(),
+          ...(options.headers || {}),
+        },
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return {
+          error: json.error || `HTTP error ${res.status}`,
+          data: undefined,
+          isBlocked: json.isBlocked || false,
+          user: json.user,
+        };
+      }
+      return json;
+    } catch (err: any) {
+      return { error: err.message || 'Network request failed' };
+    }
+  }
+
+  // ==================== AUTHENTICATION ====================
+
+  public async signIn(username: string, password: string) {
+    const result = await this.request('/api/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (result.data?.token || result.token) {
+      const tok = result.data?.token || result.token;
+      const uid = result.data?.user?.id || result.user?.id;
+      this.setSession(tok, uid);
+    }
+    return result;
+  }
+
+  public async signUp(
+    username: string,
+    password: string,
+    fullName?: string,
+    phone?: string,
+    referralCode?: string
+  ) {
+    const result = await this.request('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, fullName, phone, referralCode }),
+    });
+
+    if (result.data?.token || result.token) {
+      const tok = result.data?.token || result.token;
+      const uid = result.data?.user?.id || result.user?.id;
+      this.setSession(tok, uid);
+    }
+    return result;
+  }
+
+  public async signOut() {
+    await this.request('/api/auth/signout', { method: 'POST' });
+    this.setSession(null, null);
+  }
+
+  // ==================== USER PROFILE & LEDGER ====================
+
+  public async fetchUserData() {
+    return this.request('/api/user/data', { method: 'GET' });
+  }
+
+  public async syncUserData(payload: {
+    wallet?: WalletState;
+    transactions?: Transaction[];
+    machines?: Machine[];
+    notifications?: AppNotification[];
+    adminTasks?: AdminTask[];
+  }) {
+    return this.request('/api/user/data', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // ==================== DYNAMIC INVESTMENT CATALOG ====================
+
+  public async fetchCatalogMachines(): Promise<{ machines: Machine[]; error?: string }> {
+    const res = await this.request<{ machines: Machine[] }>('/api/catalog/machines', {
+      method: 'GET',
+    });
+    return { machines: res.machines || [], error: res.error };
+  }
+
+  public async createCatalogMachine(machine: Partial<Machine>) {
+    return this.request<{ success: boolean; machine: Machine; catalog: Machine[] }>(
+      '/api/admin/catalog/machines',
+      {
+        method: 'POST',
+        body: JSON.stringify(machine),
+      }
+    );
+  }
+
+  public async updateCatalogMachine(id: string, machine: Partial<Machine>) {
+    return this.request<{ success: boolean; machine: Machine; catalog: Machine[] }>(
+      `/api/admin/catalog/machines/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(machine),
+      }
+    );
+  }
+
+  public async deleteCatalogMachine(id: string) {
+    return this.request<{ success: boolean; catalog: Machine[] }>(
+      `/api/admin/catalog/machines/${id}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  // ==================== DEPOSITS & WITHDRAWALS ====================
+
+  public async submitDeposit(amountUGX: number, paymentMethod: string, referenceInfo?: string) {
+    return this.request<{ success: boolean; transaction: Transaction; wallet: WalletState }>('/api/wallet/deposit', {
+      method: 'POST',
+      body: JSON.stringify({ amountUGX, paymentMethod, referenceInfo }),
+    });
+  }
+
+  public async submitWithdrawal(amountUGX: number, paymentMethod: string, recipientInfo: string) {
+    return this.request<{ success: boolean; transaction: Transaction; wallet: WalletState }>('/api/wallet/withdraw', {
+      method: 'POST',
+      body: JSON.stringify({ amountUGX, paymentMethod, recipientInfo }),
+    });
+  }
+
+  public async fetchPendingTransactions() {
+    return this.request<{ transactions: Transaction[] }>('/api/admin/pending-transactions', {
+      method: 'GET',
+    });
+  }
+
+  public async approveTransaction(txId: string) {
+    return this.request<{ success: boolean; transaction: Transaction; updatedUserBalance?: number }>(
+      `/api/admin/transactions/${txId}/approve`,
+      { method: 'POST' }
+    );
+  }
+
+  public async rejectTransaction(txId: string) {
+    return this.request<{ success: boolean; transaction: Transaction }>(
+      `/api/admin/transactions/${txId}/reject`,
+      { method: 'POST' }
+    );
+  }
+
+  // ==================== ADMIN USER MANAGEMENT ====================
+
+  public async fetchAdminUsers(): Promise<{ users: AdminUserSummary[]; error?: string }> {
+    const res = await this.request<{ users: AdminUserSummary[] }>('/api/admin/users', {
+      method: 'GET',
+    });
+    return { users: res.users || [], error: res.error };
+  }
+
+  public async updateAdminUser(
+    userId: string,
+    data: { username?: string; fullName?: string; phone?: string }
+  ) {
+    return this.request<{ success: boolean; user: UserProfile }>(`/api/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async adjustUserBalance(
+    userId: string,
+    adjustment: { amountUGX: number; type: 'add' | 'deduct'; reason: string }
+  ) {
+    return this.request<{
+      success: boolean;
+      previousBalance: number;
+      newBalance: number;
+      adjustment: BalanceAdjustment;
+      wallet: WalletState;
+    }>(`/api/admin/users/${userId}/balance`, {
+      method: 'POST',
+      body: JSON.stringify(adjustment),
+    });
+  }
+
+  public async setUserStatus(userId: string, status: 'active' | 'blocked') {
+    return this.request<{ success: boolean; user: UserProfile }>(`/api/admin/users/${userId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  public async deleteAdminUser(userId: string) {
+    return this.request<{ success: boolean; message: string }>(`/api/admin/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public async fetchBalanceAdjustments(): Promise<{ adjustments: BalanceAdjustment[]; error?: string }> {
+    const res = await this.request<{ adjustments: BalanceAdjustment[] }>(
+      '/api/admin/audit/balance-adjustments',
+      { method: 'GET' }
+    );
+    return { adjustments: res.adjustments || [], error: res.error };
+  }
+
+  // ==================== USER INVESTMENTS ====================
+
+  public async fetchUserInvestments() {
+    return this.request<{ investments: any[] }>('/api/user/investments', { method: 'GET' });
+  }
+
+  public async buyInvestment(machineOrId: Partial<Machine> | string, amountUGX?: number) {
+    const payload =
+      typeof machineOrId === 'string'
+        ? { id: machineOrId, minInvestUGX: amountUGX }
+        : machineOrId;
+    return this.request<{ success: boolean; investment: any; wallet: WalletState }>('/api/user/investments/buy', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async claimInvestmentYield(investmentId: string) {
+    return this.request<{ success: boolean; claimedUGX: number; wallet: WalletState; investment: any }>(
+      `/api/user/investments/${investmentId}/claim`,
+      { method: 'POST' }
+    );
+  }
+
+  // ==================== ADMIN TASKS ====================
+
+  public async fetchAdminTasks() {
+    return this.request('/api/admin/tasks', { method: 'GET' });
+  }
+
+  public async approveAdminTask(taskId: string) {
+    return this.request(`/api/admin/tasks/${taskId}/approve`, { method: 'POST' });
+  }
+
+  public async rejectAdminTask(taskId: string) {
+    return this.request(`/api/admin/tasks/${taskId}/reject`, { method: 'POST' });
+  }
+}
+
+export const apiClient = new ApiClient();

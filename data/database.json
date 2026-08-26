@@ -1,0 +1,144 @@
+{
+  "serverDatabase": {
+    "usr_1787773443200_65k9s": {
+      "user": {
+        "id": "usr_1787773443200_65k9s",
+        "username": "killer",
+        "passwordHash": "123456",
+        "fullName": "killer",
+        "phone": "07989767646",
+        "status": "active",
+        "role": "user",
+        "isAdmin": false,
+        "tier": "Standard",
+        "referralCode": "SC-UP4YAA",
+        "referralCount": 0,
+        "referralEarningsUGX": 0,
+        "referrals": [],
+        "welcomeBonusClaimed": true,
+        "memberSince": "August 2026",
+        "createdAt": "2026-08-26T19:44:03.200Z"
+      },
+      "data": {
+        "wallet": {
+          "totalBalanceUGX": 4000,
+          "dailyPnlUGX": 0,
+          "activeMachinesCount": 0,
+          "pendingTasksCount": 0
+        },
+        "transactions": [
+          {
+            "id": "tx_welcome_1787773443200",
+            "userId": "usr_1787773443200_65k9s",
+            "username": "killer",
+            "userFullName": "killer",
+            "type": "reward",
+            "amountUGX": 4000,
+            "currency": "UGX",
+            "date": "Just now",
+            "timestamp": 1787773443200,
+            "status": "completed",
+            "description": "New User Starting Balance (UGX 4,000 Welcome Credit)",
+            "txHash": "0x6956f931...4000"
+          }
+        ],
+        "machines": [],
+        "adminTasks": [],
+        "notifications": [
+          {
+            "id": "notif_welcome_1787773443200",
+            "title": "Welcome Bonus Credited",
+            "message": "UGX 4,000 starting credit deposited into your consolidated wallet.",
+            "timestamp": "Just now",
+            "read": false,
+            "type": "success"
+          }
+        ]
+      }
+    }
+  },
+  "catalogDatabase": [
+    {
+      "id": "mach_solar_mech_10",
+      "title": "SOLAR-MECH 10",
+      "subtitle": "(Advanced Mower-Miner)",
+      "category": "DS-Mining",
+      "image": "https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80",
+      "dailyRewardUGX": 212328,
+      "status": "Active",
+      "estYearlyROI": 120,
+      "minInvestUGX": 5000000,
+      "hashrate": "54.2 TH/s",
+      "powerSource": "Solar 1.2kW Array + Dual Kinetic Blade Dynamos",
+      "uptime": "99.94%",
+      "temperature": "41.2°C",
+      "efficiency": 99.2,
+      "totalMinedUGX": 0,
+      "unclaimedRewardsUGX": 0,
+      "isBoosted": false
+    },
+    {
+      "id": "mach_ds_mining_shoe",
+      "title": "DS-MINING SHOE (Series 1)",
+      "subtitle": "(Kinetic Footwear Node)",
+      "category": "DS-Mining",
+      "image": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80",
+      "dailyRewardUGX": 1200000,
+      "status": "Active",
+      "estYearlyROI": 135,
+      "minInvestUGX": 25000000,
+      "hashrate": "210.8 TH/s",
+      "powerSource": "Kinetic-Electro Hybrid Regenerative Coil",
+      "uptime": "99.98%",
+      "temperature": "38.6°C",
+      "efficiency": 98.8,
+      "totalMinedUGX": 0,
+      "unclaimedRewardsUGX": 0,
+      "isBoosted": true
+    },
+    {
+      "id": "mach_hydro_turbine_x500",
+      "title": "HYDRO-MINER X500",
+      "subtitle": "(Micro-Hydro Generator)",
+      "category": "Clean Energy",
+      "image": "https://images.unsplash.com/photo-1466611653911-95081537e5b7?auto=format&fit=crop&w=800&q=80",
+      "dailyRewardUGX": 717672,
+      "status": "Active",
+      "estYearlyROI": 110,
+      "minInvestUGX": 10000000,
+      "hashrate": "118.0 TH/s",
+      "powerSource": "Micro-Hydro Turbine + Closed Loop Coolant",
+      "uptime": "99.85%",
+      "temperature": "32.1°C",
+      "efficiency": 99.6,
+      "totalMinedUGX": 0,
+      "unclaimedRewardsUGX": 0,
+      "isBoosted": false
+    },
+    {
+      "id": "mach_quantum_vip_9000",
+      "title": "QUANTUM VIP NODE-9",
+      "subtitle": "(High-Density Institutional Rig)",
+      "category": "VIP Products",
+      "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+      "dailyRewardUGX": 4500000,
+      "status": "Reserved",
+      "estYearlyROI": 180,
+      "minInvestUGX": 100000000,
+      "hashrate": "1,250.0 TH/s",
+      "powerSource": "Direct Grid / Cryo-Immersion Subsystem",
+      "uptime": "100.00%",
+      "temperature": "26.4°C",
+      "efficiency": 99.9,
+      "totalMinedUGX": 0,
+      "unclaimedRewardsUGX": 0,
+      "isBoosted": false
+    }
+  ],
+  "balanceAdjustments": [],
+  "activeTokens": {
+    "tok_1787773443200_86twvbcrnb": "usr_1787773443200_65k9s",
+    "tok_1787773521859_ijmjg8guno": "usr_1787773443200_65k9s"
+  },
+  "updatedAt": "2026-08-26T20:07:36.210Z"
+}

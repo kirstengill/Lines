@@ -1,0 +1,6 @@
+{
+  "name": "Sunrise Capital - DS Platform",
+  "description": "Clean, modern mobile asset investment dashboard and mining hardware portfolio with real-time analytics, consolidated wallet, and machine management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
