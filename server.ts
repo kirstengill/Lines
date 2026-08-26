@@ -202,65 +202,29 @@ let catalogDatabase: CatalogMachine[] = [
   },
 ];
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'database.json');
+// Cloud Database Synchronization (No local disk persistence)
+async function syncDatabaseCloud(userId?: string) {
+  if (!supabaseAdmin) return;
+  try {
+    if (userId && serverDatabase[userId]) {
+      const u = serverDatabase[userId];
+      await supabaseAdmin.from('wallets').upsert({
+        user_id: userId,
+        total_balance_ugx: u.data.wallet.totalBalanceUGX,
+        daily_pnl_ugx: u.data.wallet.dailyPnlUGX,
+        active_machines_count: u.data.wallet.activeMachinesCount,
+        pending_tasks_count: u.data.wallet.pendingTasksCount,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    }
+  } catch (e) {
+    // Supabase cloud sync notice
+  }
+}
 
 function saveDatabaseToDisk() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    const payload = {
-      serverDatabase,
-      catalogDatabase,
-      balanceAdjustments,
-      activeTokens,
-      updatedAt: new Date().toISOString(),
-    };
-    const tempFile = `${DB_FILE}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
-  } catch (err) {
-    console.error('Failed to save database to disk:', err);
-  }
+  // Local device disk persistence removed. All persistent data is hosted in Supabase.
 }
-
-function loadDatabaseFromDisk() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed.serverDatabase && typeof parsed.serverDatabase === 'object') {
-        // Purge any legacy demo/seed accounts
-        delete parsed.serverDatabase['usr_admin_sunrise_01'];
-        delete parsed.serverDatabase['usr_investor_sunrise_02'];
-        Object.assign(serverDatabase, parsed.serverDatabase);
-      }
-      if (parsed.catalogDatabase && Array.isArray(parsed.catalogDatabase) && parsed.catalogDatabase.length > 0) {
-        catalogDatabase = parsed.catalogDatabase;
-      }
-      if (parsed.balanceAdjustments && Array.isArray(parsed.balanceAdjustments)) {
-        balanceAdjustments.length = 0;
-        balanceAdjustments.push(...parsed.balanceAdjustments);
-      }
-      if (parsed.activeTokens && typeof parsed.activeTokens === 'object') {
-        // Clean active tokens referencing removed demo accounts
-        for (const tok in parsed.activeTokens) {
-          const uid = parsed.activeTokens[tok];
-          if (uid === 'usr_admin_sunrise_01' || uid === 'usr_investor_sunrise_02') {
-            delete parsed.activeTokens[tok];
-          }
-        }
-        Object.assign(activeTokens, parsed.activeTokens);
-      }
-    }
-  } catch (err) {
-    console.warn('Could not read existing database from disk:', err);
-  }
-}
-
-loadDatabaseFromDisk();
-saveDatabaseToDisk();
 
 function generateToken(userId: string): string {
   const token = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 12)}`;
@@ -325,7 +289,7 @@ app.post('/api/auth/signin', async (req: Request, res: Response) => {
   // 1. Try remote Supabase Auth if available
   if (supabaseAdmin) {
     try {
-      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.supabase.internal`;
+      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`;
       const { data, error } = await supabaseAdmin.auth.signInWithPassword({
         email: internalEmail,
         password,
@@ -455,7 +419,7 @@ app.post('/api/auth/signup', async (req: Request, res: Response) => {
   // Sync account with Supabase Auth if available
   if (supabaseAdmin) {
     try {
-      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.supabase.internal`;
+      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`;
       const { data: supaData, error: supaErr } = await supabaseAdmin.auth.signUp({
         email: internalEmail,
         password,

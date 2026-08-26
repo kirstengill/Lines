@@ -1,6 +1,7 @@
 /**
  * Standard REST API Client for Sunrise Capital DS Platform
- * Integrates with Supabase & Server Backend as Single Source of Truth
+ * Integrates with Supabase Cloud & Server Backend as Single Source of Truth
+ * NO localStorage or sessionStorage is used. Sessions are maintained in-memory & cloud.
  */
 
 import {
@@ -25,40 +26,14 @@ class ApiClient {
   private userId: string | null = null;
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      try {
-        this.token = sessionStorage.getItem('sunrise_api_token') || localStorage.getItem('sunrise_api_token');
-        this.userId = sessionStorage.getItem('sunrise_user_id') || localStorage.getItem('sunrise_user_id');
-      } catch {
-        // Safe fallback
-      }
-    }
+    // Session values are maintained strictly in memory
+    this.token = null;
+    this.userId = null;
   }
 
   public setSession(token: string | null, userId: string | null) {
     this.token = token;
     this.userId = userId;
-    if (typeof window !== 'undefined') {
-      try {
-        if (token) {
-          sessionStorage.setItem('sunrise_api_token', token);
-          localStorage.setItem('sunrise_api_token', token);
-        } else {
-          sessionStorage.removeItem('sunrise_api_token');
-          localStorage.removeItem('sunrise_api_token');
-        }
-
-        if (userId) {
-          sessionStorage.setItem('sunrise_user_id', userId);
-          localStorage.setItem('sunrise_user_id', userId);
-        } else {
-          sessionStorage.removeItem('sunrise_user_id');
-          localStorage.removeItem('sunrise_user_id');
-        }
-      } catch {
-        // Safe fallback
-      }
-    }
   }
 
   public getToken(): string | null {
