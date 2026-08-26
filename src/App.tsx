@@ -38,6 +38,7 @@ import {
 import { Machine, WalletState, Transaction, AdminTask, AppNotification, UserProfile } from './types';
 import { authService, UserAccountData } from './services/supabaseAuth';
 import { apiClient } from './services/apiClient';
+import { getSupabaseClient } from './services/supabase';
 import { Lock, AlertTriangle } from 'lucide-react';
 
 export default function App() {
@@ -302,7 +303,7 @@ export default function App() {
     loadCatalog();
   };
 
-  const handleDepositWithdrawSuccess = (
+  const handleDepositWithdrawSuccess = async (
     amountUGX: number,
     type: 'deposit' | 'withdraw',
     description: string,
@@ -314,13 +315,40 @@ export default function App() {
       return;
     }
 
-    // 1. DO NOT ADD OR DEDUCT THE AMOUNT FROM THE USER'S BALANCE!
-    // Available balance MUST remain unchanged while the transaction is pending.
+    // Persist to Supabase as a PENDING transaction (RPC enforces status/balance rules).
+    // Do NOT change local balance: it only changes when an admin approves in Supabase.
+    let pendingTxId = '';
+    try {
+      if (type === 'deposit') {
+        const res = await authService.submitDeposit(
+          amountUGX,
+          paymentMethod || 'MTN Mobile Money',
+          recipientInfo
+        );
+        if (!res.success) {
+          alert(res.error || 'Failed to submit request.');
+          return;
+        }
+      } else {
+        const res = await authService.submitWithdrawal(
+          amountUGX,
+          paymentMethod || 'MTN Mobile Money',
+          recipientInfo || 'Mobile Wallet'
+        );
+        if (!res.success) {
+          alert(res.error || 'Failed to submit request.');
+          return;
+        }
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to submit request.');
+      return;
+    }
 
-    // 2. Create a pending transaction record
-    const txId = `tx_${type}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const newTx: Transaction = {
-      id: txId,
+    // Optimistic pending entry for instant UI feedback; authoritative state
+    // is reloaded from Supabase by the periodic refresh below.
+    const tx: Transaction = {
+      id: `local_${Date.now()}`,
       userId: user?.id,
       username: user?.username,
       userFullName: user?.fullName,
@@ -333,10 +361,9 @@ export default function App() {
       description: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — UGX ${amountUGX.toLocaleString()} — Pending`,
       paymentMethod,
       recipientInfo,
-      txHash: `0x${Math.random().toString(16).substring(2, 10)}...ugx`,
     };
 
-    setTransactions((prev) => [newTx, ...prev]);
+    setTransactions((prev) => [tx, ...prev]);
 
     // 3. User notification
     const newNotif: AppNotification = {
@@ -349,20 +376,7 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
-    // 4. Submit to backend API
-    if (type === 'deposit') {
-      apiClient
-        .submitDeposit(amountUGX, paymentMethod || 'MTN Mobile Money', recipientInfo)
-        .catch(() => {});
-    } else {
-      apiClient
-        .submitWithdrawal(
-          amountUGX,
-          paymentMethod || 'MTN Mobile Money',
-          recipientInfo || 'Mobile Wallet'
-        )
-        .catch(() => {});
-    }
+    // Remove now-redundant REST submission: already persisted above via Supabase.
   };
 
   const handleConfirmInvest = async (machine: Machine, amountUGX: number): Promise<boolean> => {
@@ -421,14 +435,32 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
-    await apiClient.buyInvestment(machine.id, amountUGX).catch(() => {});
+    // Persist investment to Supabase (kept local optimistic UI as-is)
+    const sb = getSupabaseClient();
+    if (sb && user) {
+      try {
+        await sb.from('transactions').insert({
+          id: newTx.id,
+          user_id: user.id,
+          type: 'investment',
+          amount_ugx: amountUGX,
+          currency: 'UGX',
+          status: 'completed',
+          description: `Deployed Investment Node: ${machine.title}`,
+          timestamp: Date.now(),
+        });
+        await sb.rpc('apply_investment_debit', { p_amount: amountUGX });
+      } catch (e) {
+        console.warn('Investment persistence warning:', e);
+      }
+    }
     return true;
   };
 
   const handleApproveAdminTask = async (taskId: string) => {
     const task = adminTasks.find((t) => t.id === taskId);
     if (task?.transactionId) {
-      await apiClient.approveTransaction(task.transactionId).catch(() => {});
+      await authService.approveTransaction(task.transactionId).catch(() => {});
     }
 
     setAdminTasks((prev) =>
@@ -439,14 +471,13 @@ export default function App() {
       pendingTasksCount: Math.max(0, prev.pendingTasksCount - 1),
     }));
 
-    await apiClient.approveAdminTask(taskId).catch(() => {});
     handleRefreshUserData();
   };
 
   const handleRejectAdminTask = async (taskId: string) => {
     const task = adminTasks.find((t) => t.id === taskId);
     if (task?.transactionId) {
-      await apiClient.rejectTransaction(task.transactionId).catch(() => {});
+      await authService.rejectTransaction(task.transactionId).catch(() => {});
     }
 
     setAdminTasks((prev) =>
@@ -457,7 +488,6 @@ export default function App() {
       pendingTasksCount: Math.max(0, prev.pendingTasksCount - 1),
     }));
 
-    await apiClient.rejectAdminTask(taskId).catch(() => {});
     handleRefreshUserData();
   };
 

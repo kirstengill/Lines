@@ -23,6 +23,8 @@ import {
   INITIAL_NOTIFICATIONS,
 } from '../data/initialData';
 import { apiClient } from './apiClient';
+import { supabaseAdmin } from './supabaseAdmin';
+import { getSupabaseClient } from './supabase';
 
 export interface UserAccountData {
   wallet: WalletState;
@@ -74,7 +76,6 @@ class AuthService {
   public getClient(): SupabaseClient | null {
     return this.client;
   }
-
   public getCurrentUser(): UserProfile | null {
     return this.currentUser;
   }
@@ -569,11 +570,23 @@ class AuthService {
   // ==========================================================
 
   public async submitDeposit(amountUGX: number, paymentMethod: string, referenceInfo?: string) {
-    return apiClient.submitDeposit(amountUGX, paymentMethod, referenceInfo);
+    return supabaseAdmin.submitTransaction({
+      type: 'deposit',
+      amountUGX,
+      description: `Deposit — UGX ${amountUGX.toLocaleString()} — Pending`,
+      paymentMethod,
+      recipientInfo: referenceInfo ?? undefined,
+    });
   }
 
   public async submitWithdrawal(amountUGX: number, paymentMethod: string, recipientInfo: string) {
-    return apiClient.submitWithdrawal(amountUGX, paymentMethod, recipientInfo);
+    return supabaseAdmin.submitTransaction({
+      type: 'withdraw',
+      amountUGX,
+      description: `Withdrawal — UGX ${amountUGX.toLocaleString()} — Pending`,
+      paymentMethod,
+      recipientInfo,
+    });
   }
 
   public async buyInvestment(machineOrId: Partial<Machine> | string, amountUGX?: number) {
@@ -584,21 +597,34 @@ class AuthService {
     return apiClient.claimInvestmentYield(investmentId);
   }
 
+  public async fetchPendingTransactions() {
+    return supabaseAdmin.fetchPendingTransactions();
+  }
+
+  public async approveTransaction(txId: string) {
+    return supabaseAdmin.approveTransaction(txId);
+  }
+
+  public async rejectTransaction(txId: string) {
+    return supabaseAdmin.rejectTransaction(txId);
+  }
+
   // ==========================================================
-  // ADMIN ACTIONS (Cross-device admin control)
+  // ADMIN ACTIONS (Cross-device admin control via Supabase RPCs)
   // ==========================================================
 
   public async getAdminUsers(): Promise<{ users: AdminUserSummary[]; error?: string }> {
-    return apiClient.fetchAdminUsers();
+    return supabaseAdmin.fetchAdminUsers();
   }
 
   public async updateUserInfo(
     userId: string,
-    data: { username?: string; fullName?: string; phone?: string }
+    data: { username?: string; fullName?: string; phone?: string; status?: 'active' | 'blocked' }
   ) {
-    const res = await apiClient.updateAdminUser(userId, data);
-    if (this.currentUser && this.currentUser.id === userId && res.user) {
-      this.setCurrentUser(res.user);
+    const res = await supabaseAdmin.updateAdminUser(userId, data);
+    // Keep the locally signed-in user in sync when the admin edits THEIR OWN account
+    if (res.success && this.currentUser && this.currentUser.id === userId && data.fullName !== undefined) {
+      this.currentUser = { ...this.currentUser, fullName: data.fullName, phone: data.phone ?? this.currentUser.phone };
     }
     return res;
   }
@@ -607,19 +633,34 @@ class AuthService {
     userId: string,
     adjustment: { amountUGX: number; type: 'add' | 'deduct'; reason: string }
   ) {
-    return apiClient.adjustUserBalance(userId, adjustment);
+    return supabaseAdmin.adjustUserBalance(userId, adjustment);
   }
 
   public async toggleUserStatus(userId: string, status: 'active' | 'blocked') {
-    return apiClient.setUserStatus(userId, status);
+    return supabaseAdmin.updateAdminUser(userId, { status });
   }
 
   public async deleteUser(userId: string) {
-    return apiClient.deleteAdminUser(userId);
+    const sb = getSupabaseClient();
+    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!this.isAdmin()) return { success: false, error: 'Admin access required' };
+
+    // Clean up user-owned rows first (FK references), then the auth user's profile.
+    try {
+      await sb.from('transactions').delete().eq('user_id', userId);
+      await sb.from('notifications').delete().eq('user_id', userId);
+      await sb.from('user_machines').delete().eq('user_id', userId);
+      await sb.from('balance_adjustments').delete().eq('user_id', userId);
+      await sb.from('wallets').delete().eq('user_id', userId);
+      await sb.from('profiles').delete().eq('id', userId);
+      return { success: true, message: 'User profile removed.' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to delete user' };
+    }
   }
 
   public async getBalanceAuditLogs(): Promise<{ adjustments: BalanceAdjustment[]; error?: string }> {
-    return apiClient.fetchBalanceAdjustments();
+    return supabaseAdmin.fetchBalanceAdjustments();
   }
 }
 

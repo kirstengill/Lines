@@ -29,6 +29,7 @@ import {
   Sparkles,
   Phone,
   Calendar,
+  Mail,
   AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -42,6 +43,7 @@ import {
 } from '../types';
 import { authService } from '../services/supabaseAuth';
 import { apiClient } from '../services/apiClient';
+import { getSupabaseClient } from '../services/supabase';
 
 interface AdminDashboardViewProps {
   tasks: AdminTask[];
@@ -124,13 +126,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     currentUser && (currentUser.isAdmin === true || currentUser.role === 'admin')
   );
 
-  // 1. Fetch Pending Transactions
+  // 1. Fetch Pending Transactions (from Supabase via RPC)
   const loadPendingTransactions = async () => {
     setTxLoading(true);
     try {
-      const res = await apiClient.fetchPendingTransactions();
+      const res = await authService.fetchPendingTransactions();
       if (res.transactions) {
         setPendingTransactions(res.transactions);
+        if (res.error) console.warn('Pending transactions:', res.error);
       }
     } catch (e) {
       console.warn('Failed to load pending transactions', e);
@@ -154,13 +157,34 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
-  // 3. Fetch Catalog Projects
+  // 3. Fetch Catalog Projects (direct from Supabase)
   const loadCatalogProjects = async () => {
     setCatalogLoading(true);
     try {
-      const res = await apiClient.fetchCatalogMachines();
-      if (res.machines) {
-        setCatalogProjects(res.machines);
+      const sb = getSupabaseClient();
+      if (sb) {
+        const { data } = await sb.from('catalog_machines').select('*').order('created_at', { ascending: false });
+        if (data && data.length > 0) {
+          setCatalogProjects(data.map((m: any) => ({
+            id: m.id,
+            title: m.title,
+            subtitle: m.subtitle,
+            category: m.category || 'DS-Mining',
+            image: m.image,
+            dailyRewardUGX: Number(m.daily_reward_ugx),
+            status: m.status || 'Active',
+            estYearlyROI: Number(m.est_yearly_roi || 0),
+            minInvestUGX: Number(m.min_invest_ugx || 0),
+            hashrate: m.hashrate || '10.0 TH/s',
+            powerSource: m.power_source || 'Grid Power',
+            uptime: m.uptime || '99.9%',
+            temperature: m.temperature || '36.0°C',
+            efficiency: Number(m.efficiency || 98.5),
+            totalMinedUGX: Number(m.total_mined_ugx || 0),
+            unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || 0),
+            isBoosted: Boolean(m.is_boosted),
+          })));
+        }
       }
     } catch (e) {
       console.warn('Failed to load catalog projects', e);
@@ -193,11 +217,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   }, [isAuthorizedAdmin]);
 
-  // Handle Approve Transaction
+  // Handle Approve Transaction (Supabase RPC — atomic, idempotent)
   const handleApproveTransaction = async (tx: Transaction) => {
     setActionLoadingId(tx.id);
     try {
-      const res = await apiClient.approveTransaction(tx.id);
+      const res = await authService.approveTransaction(tx.id);
       if (res.error) {
         showToast(res.error, 'error');
       } else {
@@ -216,11 +240,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
-  // Handle Reject Transaction
+  // Handle Reject Transaction (Supabase RPC — balance untouched)
   const handleRejectTransaction = async (tx: Transaction) => {
     setActionLoadingId(tx.id);
     try {
-      const res = await apiClient.rejectTransaction(tx.id);
+      const res = await authService.rejectTransaction(tx.id);
       if (res.error) {
         showToast(res.error, 'error');
       } else {
@@ -459,13 +483,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     return matchesFilter && matchesSearch;
   });
 
-  // Filtered Users
-  const filteredUsers = usersList.filter((u) => {
+  // Filtered Users (search also matches the Auth email)
+  const filteredUsers = usersList.filter((u: any) => {
     const matchesSearch =
-      u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.username?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.fullName?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
       (u.phone && u.phone.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      u.id.toLowerCase().includes(userSearchQuery.toLowerCase());
+      (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
+      u.id?.toLowerCase().includes(userSearchQuery.toLowerCase());
 
     const matchesStatus =
       userStatusFilter === 'all'
@@ -976,6 +1001,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </div>
 
                           <div className="flex items-center gap-3 text-[11.5px] text-slate-500 mt-1 flex-wrap">
+                            {(u as any).email && (
+                              <span className="flex items-center gap-1 font-medium text-slate-600">
+                                <Mail className="w-3 h-3 text-slate-400" /> {(u as any).email}
+                              </span>
+                            )}
                             {u.phone && (
                               <span className="flex items-center gap-1">
                                 <Phone className="w-3 h-3 text-slate-400" /> {u.phone}
