@@ -72,8 +72,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) 
         );
         if (res.error) {
           setErrorMsg(res.error);
+        } else if (res.needsConfirmation) {
+          setErrorMsg('Account created! Please confirm your account, then sign in.');
         } else {
-          onAuthSuccess(res.user, res.data);
+          onAuthSuccess(res.user!, res.data);
           onClose();
         }
       } catch (err: any) {

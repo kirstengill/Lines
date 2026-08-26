@@ -148,12 +148,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (res.error) {
         setErrorMsg(res.error);
         setLoading(false);
-      } else {
-        setSuccessMsg('Account created successfully! UGX 4,000 welcome credit deposited.');
-        setTimeout(() => {
-          onAuthSuccess(res.user, res.data);
-        }, 600);
+        return;
       }
+      if (res.needsConfirmation) {
+        setSuccessMsg('Account created! Please confirm your account, then sign in.');
+        setLoading(false);
+        return;
+      }
+      setSuccessMsg('Account created successfully! UGX 4,000 welcome credit deposited.');
+      setTimeout(() => {
+        onAuthSuccess(res.user!, res.data);
+      }, 600);
     } catch (err: any) {
       setErrorMsg(err.message || 'Sign up failed. Please try again.');
       setLoading(false);

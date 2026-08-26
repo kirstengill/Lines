@@ -68,8 +68,8 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthViewActive, setIsAuthViewActive] = useState<boolean>(false);
 
-  // Check if current user is an authorized admin
-  const isCurrentAdmin = Boolean(user && (user.role === 'admin' || user.isAdmin === true));
+  // Check if current user is an authorized admin — ONLY via profiles.is_admin
+  const isCurrentAdmin = Boolean(user && user.isAdmin === true);
   const isBlocked = Boolean(user && user.status === 'blocked');
 
   // Active View Mode: 'auth' | 'admin' | 'user'
@@ -120,7 +120,7 @@ export default function App() {
             setMachines(restoredData.machines || []);
             setAdminTasks(restoredData.adminTasks || []);
             setNotifications(restoredData.notifications || []);
-            const isAdmin = Boolean(restoredUser.role === 'admin' || restoredUser.isAdmin);
+            const isAdmin = Boolean(restoredUser.isAdmin === true);
             setViewMode(isAdmin ? 'admin' : 'user');
             setIsAuthViewActive(false);
           } else {
@@ -468,7 +468,6 @@ export default function App() {
   const handleSignOut = async () => {
     triggerPageTransition(async () => {
       await authService.signOut();
-      await apiClient.signOut();
       setUser(null);
       setViewMode('auth');
       setIsAuthViewActive(true);
@@ -500,7 +499,7 @@ export default function App() {
         }
       }
 
-      const isAdminUser = Boolean(authedUser.role === 'admin' || authedUser.isAdmin === true);
+      const isAdminUser = Boolean(authedUser.isAdmin === true);
       if (isAdminUser) {
         setViewMode('admin');
       } else {

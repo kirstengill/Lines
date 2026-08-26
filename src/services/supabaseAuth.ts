@@ -35,6 +35,7 @@ export interface UserAccountData {
 class AuthService {
   private client: SupabaseClient | null = null;
   private currentUser: UserProfile | null = null;
+  private accessToken: string | null = null;
   private memoryUserData: { [userId: string]: UserAccountData } = {};
 
   constructor() {
@@ -46,13 +47,23 @@ class AuthService {
     const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
     if (envUrl && envKey) {
       try {
-        // Initialize Supabase client strictly without localStorage persistence for clean memory flow
+        // Supabase Auth: session persisted + auto refreshed; restored at startup.
         this.client = createClient(envUrl, envKey, {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
           },
+        });
+
+        // Keep the REST data client supplied with the current access token
+        this.client.auth.onAuthStateChange((_event, session) => {
+          if (session?.access_token) {
+            this.accessToken = session.access_token;
+            if (this.currentUser) {
+              apiClient.setSession(session.access_token, this.currentUser.id);
+            }
+          }
         });
       } catch (e) {
         console.warn('Supabase client initialization warning:', e);
@@ -73,8 +84,9 @@ class AuthService {
   }
 
   public isAdmin(): boolean {
+    // Authoritative flag ONLY: public.profiles.is_admin
     if (!this.currentUser) return false;
-    return Boolean(this.currentUser.isAdmin || this.currentUser.role === 'admin');
+    return this.currentUser.isAdmin === true;
   }
 
   public isBlocked(): boolean {
@@ -82,49 +94,53 @@ class AuthService {
     return this.currentUser.status === 'blocked';
   }
 
-  public setCurrentUser(user: UserProfile | null) {
+  public setCurrentUser(user: UserProfile | null, accessToken?: string | null) {
     this.currentUser = user;
     if (user) {
-      apiClient.setSession(null, user.id);
+      // REST data endpoints receive the real Supabase Auth session token
+      apiClient.setSession(accessToken ?? this.accessToken, user.id);
     } else {
       apiClient.setSession(null, null);
     }
   }
 
   private formatEmail(identifier: string): string {
-    const clean = identifier.trim().toLowerCase();
-    if (clean.includes('@')) {
-      return clean;
+    const clean = this.normalizeUsername(identifier);
+    if (!clean) return '';
+    if (clean.includes('@')) return clean;
+    return `${clean}@sunrise-ds.com`;
+  }
+
+  /**
+   * Map Supabase Auth errors to clear, user-facing messages.
+   */
+  private mapAuthError(error: any): string {
+    const code = error?.code || '';
+    const msg = (error?.message || '').toLowerCase();
+    if (code === 'invalid_credentials' || msg.includes('invalid login credentials')) {
+      return 'Invalid username or password.';
     }
-    const sanitizedUsername = clean.replace(/[^a-z0-9_]/g, '_');
-    return `${sanitizedUsername}@sunrise-ds.com`;
+    if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
+      return 'Your account has not been confirmed yet. Please confirm your account before signing in.';
+    }
+    if (msg.includes('rate limit')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    return error?.message || 'Unable to sign in. Please try again.';
   }
 
   // ==========================================================
   // CROSS-DEVICE SESSION RESTORATION (from Supabase Cloud)
   // ==========================================================
 
-  public async restoreSession(): Promise<{ user: UserProfile | null; data: UserAccountData | null }> {
+  public async restoreSession(): Promise<{ user: UserProfile | null; data: UserAccountData | null; error?: string }> {
     if (!this.client) {
-      return { user: null, data: null };
+      return { user: null, data: null, error: 'Authentication service is not configured.' };
     }
 
     try {
       const { data: { session }, error: sessionErr } = await this.client.auth.getSession();
       if (sessionErr || !session || !session.user) {
-        // Try fallback to backend active session if available
-        const apiRes = await apiClient.fetchUserData();
-        if (apiRes && apiRes.user) {
-          this.currentUser = apiRes.user;
-          this.memoryUserData[apiRes.user.id] = apiRes.data || {
-            wallet: INITIAL_WALLET,
-            transactions: [],
-            machines: [],
-            adminTasks: [],
-            notifications: [],
-          };
-          return { user: apiRes.user, data: this.memoryUserData[apiRes.user.id] };
-        }
         this.currentUser = null;
         return { user: null, data: null };
       }
@@ -132,20 +148,20 @@ class AuthService {
       const user = session.user;
       const profile = await this.fetchProfileFromSupabase(user);
       if (!profile) {
+        // No matching public.profiles row for this auth.uid(): refuse silently-broken sessions.
+        console.warn('restoreSession: no profile row found for', user.id);
+        await this.client.auth.signOut();
         this.currentUser = null;
-        return { user: null, data: null };
+        return { user: null, data: null, error: 'Signed-in account has no profile record. Please contact support.' };
       }
 
-      this.setCurrentUser(profile);
-
-      if (profile.status === 'blocked') {
-        return { user: profile, data: null };
-      }
+      this.setCurrentUser(profile, session.access_token);
 
       const dataRes = await this.refreshUserData();
       return { user: profile, data: dataRes.data || null };
     } catch (err) {
       console.warn('Session restore exception:', err);
+      this.currentUser = null;
       return { user: null, data: null };
     }
   }
@@ -160,6 +176,10 @@ class AuthService {
     error?: string;
     isBlocked?: boolean;
   }> {
+    if (!this.client) {
+      return { error: 'Authentication service is not configured.' };
+    }
+
     const cleanInput = (usernameOrEmail || '').trim();
     if (!cleanInput || !password) {
       return { error: 'Username/Email and password are required.' };
@@ -167,56 +187,41 @@ class AuthService {
 
     const email = this.formatEmail(cleanInput);
 
-    // 1. Authenticate with Supabase Auth
-    if (this.client) {
-      try {
-        const { data: authData, error: authError } = await this.client.auth.signInWithPassword({
-          email,
-          password,
-        });
+    // Single authentication path: Supabase Auth
+    const { data: authData, error: authError } = await this.client.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-        if (!authError && authData.user) {
-          const profile = await this.fetchProfileFromSupabase(authData.user);
-          if (profile) {
-            this.setCurrentUser(profile);
-
-            if (profile.status === 'blocked') {
-              return { error: 'Account is suspended by administrator.', isBlocked: true, user: profile };
-            }
-
-            const dataRes = await this.refreshUserData();
-            const accountData = dataRes.data || {
-              wallet: INITIAL_WALLET,
-              transactions: [],
-              machines: [],
-              adminTasks: [],
-              notifications: [],
-            };
-
-            this.memoryUserData[profile.id] = accountData;
-            return { user: profile, data: accountData };
-          }
-        }
-      } catch (supaErr: any) {
-        console.warn('Supabase direct sign-in fallback check:', supaErr?.message);
-      }
+    if (authError || !authData.user || !authData.session) {
+      return { error: this.mapAuthError(authError) };
     }
 
-    // 2. Fallback via Centralized Backend API (which syncs to Supabase)
-    const apiResult = await apiClient.signIn(cleanInput, password);
-    if (apiResult.error) {
-      return { error: apiResult.error, isBlocked: apiResult.isBlocked };
+    const profile = await this.fetchProfileFromSupabase(authData.user);
+    if (!profile) {
+      await this.client.auth.signOut();
+      return { error: 'Signed in, but no profile record was found for your account. Please contact support.' };
     }
 
-    if (apiResult.user) {
-      this.setCurrentUser(apiResult.user);
-      if (apiResult.data) {
-        this.memoryUserData[apiResult.user.id] = apiResult.data;
-      }
-      return { user: apiResult.user, data: apiResult.data };
+    if (profile.status === 'blocked') {
+      await this.client.auth.signOut();
+      this.currentUser = null;
+      return { error: 'Your account has been suspended by an administrator.', isBlocked: true };
     }
 
-    return { error: 'Authentication failed. Please check credentials.' };
+    this.setCurrentUser(profile, authData.session.access_token);
+
+    const dataRes = await this.refreshUserData();
+    const accountData = dataRes.data || {
+      wallet: INITIAL_WALLET,
+      transactions: [],
+      machines: [],
+      adminTasks: [],
+      notifications: [],
+    };
+
+    this.memoryUserData[profile.id] = accountData;
+    return { user: profile, data: accountData };
   }
 
   public async signUp(
@@ -229,67 +234,95 @@ class AuthService {
     user?: UserProfile;
     data?: UserAccountData;
     error?: string;
+    needsConfirmation?: boolean;
   }> {
-    const cleanUsername = (username || '').trim();
+    if (!this.client) {
+      return { error: 'Authentication service is not configured.' };
+    }
+
+    // Same normalization as sign-in: trim -> lowercase -> sanitize
+    const cleanUsername = this.normalizeUsername(username);
     if (!cleanUsername) {
       return { error: 'Username is required.' };
     }
-    const email = this.formatEmail(cleanUsername);
+    const email = `${cleanUsername}@sunrise-ds.com`;
 
-    // 1. Sign up on Supabase Auth
-    if (this.client) {
-      try {
-        const { data: authData, error: authError } = await this.client.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              username: cleanUsername,
-              full_name: fullName || cleanUsername,
-              phone: phone || '',
-              referral_code: referralCode || '',
-              role: 'user',
-            },
-          },
-        });
+    // Single authentication path: Supabase Auth.
+    // NEVER submit is_admin/role in metadata: new users are always normal users.
+    const { data: authData, error: authError } = await this.client.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username: cleanUsername,
+          full_name: (fullName || cleanUsername).trim(),
+          phone: phone || '',
+          referred_by: referralCode || '',
+        },
+      },
+    });
 
-        if (!authError && authData.user) {
-          // If session created automatically
-          const profile = await this.fetchProfileFromSupabase(authData.user);
-          if (profile) {
-            this.setCurrentUser(profile);
-            const dataRes = await this.refreshUserData();
-            const userData = dataRes.data || {
-              wallet: INITIAL_WALLET,
-              transactions: [],
-              machines: [],
-              adminTasks: [],
-              notifications: [],
-            };
-            this.memoryUserData[profile.id] = userData;
-            return { user: profile, data: userData };
-          }
-        }
-      } catch (supaErr: any) {
-        console.warn('Supabase signup client fallback:', supaErr?.message);
+    if (authError) {
+      const msg = (authError.message || '').toLowerCase();
+      if (msg.includes('already registered') || msg.includes('already exists')) {
+        return { error: 'This username is already taken. Please choose another one.' };
+      }
+      if (authError.code === 'user_banned') {
+        return { error: 'This account has been blocked.' };
+      }
+      return { error: authError.message || 'Sign up failed. Please try again.' };
+    }
+
+    if (!authData.user) {
+      return { error: 'Failed to create user account.' };
+    }
+
+    // If email confirmation is enabled, no session is returned yet.
+    if (!authData.session) {
+      return {
+        needsConfirmation: true,
+        error:
+          'Account created! Please confirm your account before signing in.',
+      };
+    }
+
+    // Profile + wallet are auto-created by the on_auth_user_created DB trigger.
+    let profile = await this.fetchProfileFromSupabase(authData.user);
+    if (!profile && this.client) {
+      // Trigger may complete asynchronously; retry briefly.
+      for (let i = 0; i < 5 && !profile; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        profile = await this.fetchProfileFromSupabase(authData.user);
       }
     }
-
-    // 2. Fallback via Centralized Backend API
-    const apiResult = await apiClient.signUp(cleanUsername, password, fullName, phone, referralCode);
-    if (apiResult.error) {
-      return { error: apiResult.error };
+    if (!profile) {
+      await this.client.auth.signOut();
+      return { error: 'Account created but the profile record could not be loaded. Please contact support.' };
     }
 
-    if (apiResult.user) {
-      this.setCurrentUser(apiResult.user);
-      if (apiResult.data) {
-        this.memoryUserData[apiResult.user.id] = apiResult.data;
-      }
-      return { user: apiResult.user, data: apiResult.data };
-    }
+    this.setCurrentUser(profile, authData.session.access_token);
 
-    return { error: 'Failed to create user account.' };
+    const dataRes = await this.refreshUserData();
+    const userData = dataRes.data || {
+      wallet: INITIAL_WALLET,
+      transactions: [],
+      machines: [],
+      adminTasks: [],
+      notifications: [],
+    };
+    this.memoryUserData[profile.id] = userData;
+    return { user: profile, data: userData };
+  }
+
+  /**
+   * Normalize a username exactly once, shared by sign-in and sign-up so the
+   * same Auth email is generated in both flows.
+   */
+  private normalizeUsername(username: string): string {
+    const clean = (username || '').trim().toLowerCase();
+    if (!clean) return '';
+    if (clean.includes('@')) return clean; // already an email
+    return clean.replace(/[^a-z0-9_]/g, '_');
   }
 
   public async signOut(): Promise<void> {
@@ -300,8 +333,9 @@ class AuthService {
         // Ignore signout error
       }
     }
-    await apiClient.signOut();
-    this.setCurrentUser(null);
+    apiClient.setSession(null, null);
+    this.currentUser = null;
+    this.accessToken = null;
     this.memoryUserData = {};
   }
 
@@ -310,31 +344,10 @@ class AuthService {
   // ==========================================================
 
   private async fetchProfileFromSupabase(authUser: User): Promise<UserProfile | null> {
-    const meta = authUser.user_metadata || {};
-    const isAdmin = meta.role === 'admin' || meta.is_admin === true;
-    const fallbackProfile: UserProfile = {
-      id: authUser.id,
-      username: meta.username || authUser.email?.split('@')[0] || 'user',
-      fullName: meta.full_name || meta.username || 'User',
-      phone: meta.phone || '',
-      role: isAdmin ? 'admin' : 'user',
-      status: meta.status || 'active',
-      tier: isAdmin ? 'VIP 2 Elite' : 'Standard',
-      memberSince: 'August 2026',
-      verified: true,
-      country: 'Uganda',
-      referralCode: meta.referral_code || '',
-      referralCount: meta.referral_count || 0,
-      referralEarningsUGX: meta.referral_earnings_ugx || 0,
-      referrals: [],
-      welcomeBonusClaimed: true,
-      createdAt: authUser.created_at,
-      isAdmin,
-    };
-
-    if (!this.client) return fallbackProfile;
+    if (!this.client) return null;
 
     try {
+      // Identify the profile ONLY by auth.uid() — never by username.
       const { data, error } = await this.client
         .from('profiles')
         .select('*')
@@ -342,18 +355,21 @@ class AuthService {
         .single();
 
       if (error || !data) {
-        return fallbackProfile;
+        return null;
       }
 
-      const role = data.role || 'user';
+      // Authoritative admin flag: public.profiles.is_admin.
+      const isAdmin = data.is_admin === true;
+      const status = typeof data.status === 'string' ? data.status : 'active';
+
       return {
         id: data.id,
         username: data.username,
         fullName: data.full_name || '',
         phone: data.phone || '',
-        role: role as 'admin' | 'user',
-        status: data.status || 'active',
-        tier: (data.tier || (role === 'admin' ? 'VIP 2 Elite' : 'Standard')) as any,
+        role: isAdmin ? ('admin' as const) : ('user' as const),
+        status,
+        tier: (data.tier || 'Standard') as any,
         memberSince: 'August 2026',
         verified: true,
         country: 'Uganda',
@@ -364,10 +380,10 @@ class AuthService {
         referrals: [],
         welcomeBonusClaimed: data.welcome_bonus_claimed !== false,
         createdAt: data.created_at,
-        isAdmin: role === 'admin',
+        isAdmin,
       };
     } catch {
-      return fallbackProfile;
+      return null;
     }
   }
 
@@ -396,15 +412,16 @@ class AuthService {
         ]);
 
         if (profileRes.data) {
-          const role = profileRes.data.role || 'user';
+          // Authoritative admin flag: public.profiles.is_admin
+          const isAdmin = profileRes.data.is_admin === true;
           this.currentUser = {
             id: profileRes.data.id,
             username: profileRes.data.username,
             fullName: profileRes.data.full_name || '',
             phone: profileRes.data.phone || '',
-            role: role as 'admin' | 'user',
-            status: profileRes.data.status || 'active',
-            tier: (profileRes.data.tier || (role === 'admin' ? 'VIP 2 Elite' : 'Standard')) as any,
+            role: isAdmin ? ('admin' as const) : ('user' as const),
+            status: typeof profileRes.data.status === 'string' ? profileRes.data.status : 'active',
+            tier: (profileRes.data.tier || 'Standard') as any,
             memberSince: 'August 2026',
             verified: true,
             country: 'Uganda',
@@ -415,8 +432,19 @@ class AuthService {
             referrals: [],
             welcomeBonusClaimed: profileRes.data.welcome_bonus_claimed !== false,
             createdAt: profileRes.data.created_at,
-            isAdmin: role === 'admin',
+            isAdmin,
           };
+        }
+
+        // Keep the REST client supplied with the freshest Supabase Auth token
+        try {
+          const { data: { session } } = await this.client.auth.getSession();
+          if (session?.access_token && this.currentUser) {
+            this.accessToken = session.access_token;
+            apiClient.setSession(session.access_token, this.currentUser.id);
+          }
+        } catch {
+          // ignore
         }
 
         const wallet: WalletState = walletRes.data
@@ -501,34 +529,14 @@ class AuthService {
           data: userData,
           isBlocked: this.currentUser.status === 'blocked',
         };
-      } catch {
-        // Fall through to API sync
+      } catch (e) {
+        console.warn('refreshUserData failed:', e);
       }
-    }
-
-    // 2. Fallback to centralized API backend
-    const apiRes = await apiClient.fetchUserData();
-    if (apiRes.data) {
-      this.memoryUserData[userId] = apiRes.data;
-      if (apiRes.user) {
-        this.currentUser = apiRes.user;
-      }
-      return {
-        user: this.currentUser,
-        data: apiRes.data,
-        isBlocked: this.currentUser.status === 'blocked',
-      };
     }
 
     return {
       user: this.currentUser,
-      data: this.memoryUserData[userId] || {
-        wallet: INITIAL_WALLET,
-        transactions: INITIAL_TRANSACTIONS,
-        machines: INITIAL_MACHINES,
-        adminTasks: INITIAL_ADMIN_TASKS,
-        notifications: INITIAL_NOTIFICATIONS,
-      },
+      data: this.memoryUserData[userId] || null,
       isBlocked: this.currentUser.status === 'blocked',
     };
   }

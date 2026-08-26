@@ -48,11 +48,10 @@ class ApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    // Only forward the REAL Supabase Auth session token.
+    // No x-user-id spoofing: identity always comes from the verified JWT.
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
-    }
-    if (this.userId) {
-      headers['x-user-id'] = this.userId;
     }
     return headers;
   }
@@ -86,43 +85,12 @@ class ApiClient {
   }
 
   // ==================== AUTHENTICATION ====================
-
-  public async signIn(username: string, password: string) {
-    const result = await this.request('/api/auth/signin', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-
-    if (result.data?.token || result.token) {
-      const tok = result.data?.token || result.token;
-      const uid = result.data?.user?.id || result.user?.id;
-      this.setSession(tok, uid);
-    }
-    return result;
-  }
-
-  public async signUp(
-    username: string,
-    password: string,
-    fullName?: string,
-    phone?: string,
-    referralCode?: string
-  ) {
-    const result = await this.request('/api/auth/signup', {
-      method: 'POST',
-      body: JSON.stringify({ username, password, fullName, phone, referralCode }),
-    });
-
-    if (result.data?.token || result.token) {
-      const tok = result.data?.token || result.token;
-      const uid = result.data?.user?.id || result.user?.id;
-      this.setSession(tok, uid);
-    }
-    return result;
-  }
+  // NOTE: All authentication (sign-in, sign-up, sign-out, session) is handled
+  // exclusively by Supabase Auth via src/services/supabaseAuth.ts.
+  // There is NO /api/auth/* fallback. The REST backend receives only the
+  // authenticated Supabase session token for application-data endpoints.
 
   public async signOut() {
-    await this.request('/api/auth/signout', { method: 'POST' });
     this.setSession(null, null);
   }
 
