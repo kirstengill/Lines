@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     type TEXT NOT NULL CHECK (type IN ('deposit', 'withdraw', 'reward', 'investment', 'transfer', 'bonus', 'adjustment')),
     amount_ugx NUMERIC NOT NULL,
     currency TEXT DEFAULT 'UGX' NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'rejected')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'approved', 'rejected')),
     description TEXT,
     payment_method TEXT,
     recipient_info TEXT,
@@ -251,24 +251,24 @@ CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE
 
 -- Wallets Policies
 DROP POLICY IF EXISTS "Users can view their own wallet" ON public.wallets;
-CREATE POLICY "Users can view their own wallet" ON public.wallets FOR SELECT USING (auth.uid() = user_id OR auth.jwt()->>'role' = 'service_role' OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can view their own wallet" ON public.wallets FOR SELECT USING (auth.uid() = user_id OR auth.jwt()->>'role' = 'service_role' OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 DROP POLICY IF EXISTS "Users can update their own wallet" ON public.wallets;
-CREATE POLICY "Users can update their own wallet" ON public.wallets FOR ALL USING (auth.uid() = user_id OR auth.jwt()->>'role' = 'service_role' OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can update their own wallet" ON public.wallets FOR ALL USING (auth.uid() = user_id OR auth.jwt()->>'role' = 'service_role' OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- Transactions Policies
 DROP POLICY IF EXISTS "Users can view their own transactions" ON public.transactions;
-CREATE POLICY "Users can view their own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can view their own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 DROP POLICY IF EXISTS "Users can insert their own transactions" ON public.transactions;
-CREATE POLICY "Users can insert their own transactions" ON public.transactions FOR INSERT WITH CHECK (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can insert their own transactions" ON public.transactions FOR INSERT WITH CHECK (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 DROP POLICY IF EXISTS "Users or admins can update transactions" ON public.transactions;
-CREATE POLICY "Users or admins can update transactions" ON public.transactions FOR UPDATE USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users or admins can update transactions" ON public.transactions FOR UPDATE USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- User Machines Policies
 DROP POLICY IF EXISTS "Users can manage their own machines" ON public.user_machines;
-CREATE POLICY "Users can manage their own machines" ON public.user_machines FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can manage their own machines" ON public.user_machines FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- Catalog Machines Policies (Public read, admin write)
 DROP POLICY IF EXISTS "Public can view catalog machines" ON public.catalog_machines;
@@ -279,15 +279,15 @@ CREATE POLICY "Admins can manage catalog machines" ON public.catalog_machines FO
 
 -- Notifications Policies
 DROP POLICY IF EXISTS "Users can view and manage their own notifications" ON public.notifications;
-CREATE POLICY "Users can view and manage their own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can view and manage their own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- Admin Tasks Policies
 DROP POLICY IF EXISTS "Admin tasks viewable by admins and owners" ON public.admin_tasks;
-CREATE POLICY "Admin tasks viewable by admins and owners" ON public.admin_tasks FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admin tasks viewable by admins and owners" ON public.admin_tasks FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- Balance Adjustments Policies
 DROP POLICY IF EXISTS "Balance adjustments viewable by owner or admin" ON public.balance_adjustments;
-CREATE POLICY "Balance adjustments viewable by owner or admin" ON public.balance_adjustments FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Balance adjustments viewable by owner or admin" ON public.balance_adjustments FOR ALL USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)));
 
 -- ==========================================================
 -- SEED INITIAL CATALOG MACHINES

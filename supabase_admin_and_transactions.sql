@@ -15,7 +15,13 @@ RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = TRUE
+    SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND (p.is_admin = TRUE OR p.role = 'admin')
+  ) OR EXISTS (
+    SELECT 1 FROM auth.users u WHERE u.id = auth.uid() AND (
+      (u.raw_user_meta_data->>'is_admin')::boolean = true OR
+      (u.raw_user_meta_data->>'role') = 'admin' OR
+      u.email = 'anthonymugenyi918@gmail.com'
+    )
   );
 $$;
 
@@ -41,6 +47,7 @@ DECLARE
   v_id TEXT;
   v_uid UUID := auth.uid();
   v_wallet public.wallets;
+  v_res public.transactions;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
 
@@ -69,14 +76,30 @@ BEGIN
 
   INSERT INTO public.transactions (
     id, user_id, type, amount_ugx, currency, status,
-    description, payment_method, recipient_info, timestamp
+    description, payment_method, recipient_info, timestamp, created_at
   ) VALUES (
     v_id, v_uid, p_type, p_amount_ugx, 'UGX', 'pending',
-    COALESCE(p_description, p_type), p_payment_method, p_recipient_info,
-    (extract(epoch FROM now()) * 1000)::BIGINT
-  );
+    COALESCE(p_description, p_type || ' Request — UGX ' || p_amount_ugx::text),
+    p_payment_method, p_recipient_info,
+    (extract(epoch FROM now()) * 1000)::BIGINT,
+    now()
+  ) RETURNING * INTO v_res;
 
-  RETURN (SELECT t.* FROM public.transactions t WHERE t.id = v_id);
+  -- Also insert into admin_tasks for visibility in Admin multisig queue
+  INSERT INTO public.admin_tasks (
+    id, user_id, transaction_id, title, description,
+    priority, category, type, status, amount_ugx, created_at
+  ) VALUES (
+    'task_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18)),
+    v_uid, v_id,
+    CASE WHEN p_type = 'deposit' THEN 'Deposit Verification: UGX ' || p_amount_ugx::text ELSE 'Withdrawal Review: UGX ' || p_amount_ugx::text END,
+    'User requested ' || p_type || ' of UGX ' || p_amount_ugx::text || COALESCE(' via ' || p_payment_method, ''),
+    'high',
+    CASE WHEN p_type = 'deposit' THEN 'Deposit Verification' ELSE 'Withdrawal Review' END,
+    p_type, 'pending', p_amount_ugx, now()
+  ) ON CONFLICT DO NOTHING;
+
+  RETURN v_res;
 END;
 $$;
 
@@ -95,13 +118,17 @@ RETURNS TABLE (
 )
 LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT t.id, t.user_id, p.username, p.full_name,
+  SELECT t.id, t.user_id,
+         COALESCE(p.username, (u.raw_user_meta_data->>'username'), split_part(u.email, '@', 1), 'user') AS username,
+         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS user_full_name,
          t.type, t.amount_ugx, t.status,
-         t.description, t.payment_method, t.recipient_info, t.created_at
+         t.description, t.payment_method, t.recipient_info,
+         COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) AS created_at
   FROM public.transactions t
-  JOIN public.profiles p ON p.id = t.user_id
+  LEFT JOIN public.profiles p ON p.id = t.user_id
+  LEFT JOIN auth.users u ON u.id = t.user_id
   WHERE t.status = 'pending'
-  ORDER BY t.created_at ASC;
+  ORDER BY COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) ASC;
 $$;
 
 -- All transactions (for Admin ledger)
@@ -116,14 +143,16 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
   SELECT t.id, t.user_id,
          COALESCE(p.username, (u.raw_user_meta_data->>'username'), split_part(u.email, '@', 1), 'user') AS username,
-         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS user_full_name,
+         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), (u.raw_user_meta_data->>'name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS user_full_name,
          t.type, t.amount_ugx, t.currency, t.status,
          t.description, t.payment_method, t.recipient_info,
-         t.tx_hash, t.created_at, t.timestamp
+         t.tx_hash,
+         COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) AS created_at,
+         COALESCE(t.timestamp, (extract(epoch FROM t.created_at) * 1000)::BIGINT) AS "timestamp"
   FROM public.transactions t
   LEFT JOIN public.profiles p ON p.id = t.user_id
   LEFT JOIN auth.users u ON u.id = t.user_id
-  ORDER BY t.created_at DESC;
+  ORDER BY COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) DESC;
 $$;
 
 -- ============================================================
@@ -251,11 +280,11 @@ AS $$
          COALESCE(p.phone, (u.raw_user_meta_data->>'phone'), u.phone, '') AS phone,
          u.email,
          COALESCE(p.status, 'active') AS status,
-         COALESCE(p.is_admin, false) AS is_admin,
+         COALESCE(p.is_admin, ((u.raw_user_meta_data->>'is_admin')::boolean), (p.role = 'admin'), false) AS is_admin,
          COALESCE(p.tier, 'Standard') AS tier,
          COALESCE(p.referral_code, '') AS referral_code,
          COALESCE(p.referral_count, 0) AS referral_count,
-         COALESCE(w.balance, w.total_balance_ugx, 0) AS balance_ugx,
+         COALESCE(w.total_balance_ugx, 0) AS balance_ugx,
          COALESCE(w.active_machines_count, 0) AS active_machines_count,
          (SELECT COUNT(*) FROM public.transactions t WHERE t.user_id = u.id) AS transactions_count,
          u.created_at AS auth_created_at,
@@ -292,8 +321,6 @@ BEGIN
     updated_at = now()
   WHERE id = p_user_id;
 
-  IF NOT FOUND THEN RAISE EXCEPTION 'User not found'; END IF;
-
   -- keep auth.users user_metadata in sync so it shows in Supabase Auth dashboard
   IF p_full_name_meta IS NOT NULL THEN
     UPDATE auth.users
@@ -318,34 +345,86 @@ RETURNS TABLE (previous_balance NUMERIC, new_balance NUMERIC)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
-  v_prev NUMERIC; v_new NUMERIC; v_me public.profiles%ROWTYPE;
+  v_prev NUMERIC := 0;
+  v_new NUMERIC := 0;
+  v_admin_username TEXT;
+  v_user_username TEXT;
+  v_user_full_name TEXT;
 BEGIN
   IF NOT public.is_admin() THEN RAISE EXCEPTION 'Admin access required'; END IF;
   IF p_type NOT IN ('add', 'deduct') THEN RAISE EXCEPTION 'Invalid adjustment type'; END IF;
   IF p_amount IS NULL OR p_amount <= 0 THEN RAISE EXCEPTION 'Amount must be positive'; END IF;
 
-  SELECT * INTO v_me FROM public.profiles WHERE id = auth.uid();
+  -- Ensure target wallet exists
+  INSERT INTO public.wallets (user_id, total_balance_ugx, active_machines_count, pending_tasks_count, updated_at)
+  VALUES (p_user_id, 0, 0, 0, now())
+  ON CONFLICT (user_id) DO NOTHING;
 
   SELECT total_balance_ugx INTO v_prev FROM public.wallets WHERE user_id = p_user_id FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Wallet not found for user'; END IF;
+  IF v_prev IS NULL THEN v_prev := 0; END IF;
 
   v_new := CASE WHEN p_type = 'add' THEN v_prev + p_amount ELSE v_prev - p_amount END;
   IF v_new < 0 THEN RAISE EXCEPTION 'Resulting balance cannot be negative'; END IF;
 
   UPDATE public.wallets SET total_balance_ugx = v_new, updated_at = now() WHERE user_id = p_user_id;
 
+  -- Get admin info
+  SELECT COALESCE(p.username, split_part(u.email, '@', 1), 'Admin') INTO v_admin_username
+  FROM auth.users u
+  LEFT JOIN public.profiles p ON p.id = u.id
+  WHERE u.id = auth.uid();
+
+  -- Get user info
+  SELECT COALESCE(p.username, split_part(u.email, '@', 1), 'user'),
+         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), p.username, 'User')
+  INTO v_user_username, v_user_full_name
+  FROM auth.users u
+  LEFT JOIN public.profiles p ON p.id = u.id
+  WHERE u.id = p_user_id;
+
+  -- Insert Audit Record
   INSERT INTO public.balance_adjustments (
     id, user_id, username, user_full_name,
     previous_balance_ugx, adjustment_amount_ugx, new_balance_ugx,
     type, reason, admin_id, admin_username, timestamp, date
   ) VALUES (
-    'adj_' || replace(gen_random_uuid()::text, '-', ''), p_user_id,
-    (SELECT username FROM public.profiles WHERE id = p_user_id),
-    (SELECT full_name FROM public.profiles WHERE id = p_user_id),
-    v_prev, p_amount, v_new, p_type, p_reason,
-    auth.uid()::text, v_me.username,
+    'adj_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18)),
+    p_user_id,
+    COALESCE(v_user_username, 'user'),
+    COALESCE(v_user_full_name, 'User'),
+    v_prev, p_amount, v_new, p_type, COALESCE(p_reason, 'Admin Adjustment'),
+    COALESCE(auth.uid()::text, 'admin'), COALESCE(v_admin_username, 'Admin'),
     (extract(epoch FROM now()) * 1000)::BIGINT,
     to_char(now(), 'YYYY-MM-DD')
+  );
+
+  -- Insert Transaction Record
+  INSERT INTO public.transactions (
+    id, user_id, type, amount_ugx, currency, status,
+    description, timestamp, created_at
+  ) VALUES (
+    'tx_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18)),
+    p_user_id,
+    'adjustment',
+    p_amount,
+    'UGX',
+    'completed',
+    'Admin Balance Adjustment (' || p_type || '): ' || COALESCE(p_reason, 'Manual update'),
+    (extract(epoch FROM now()) * 1000)::BIGINT,
+    now()
+  );
+
+  -- Insert Notification for the user
+  INSERT INTO public.notifications (
+    id, user_id, title, message, read, type, created_at
+  ) VALUES (
+    'notif_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18)),
+    p_user_id,
+    CASE WHEN p_type = 'add' THEN 'Balance Credited by Admin' ELSE 'Balance Adjusted by Admin' END,
+    'Your wallet balance was ' || (CASE WHEN p_type = 'add' THEN 'credited with UGX ' ELSE 'deducted by UGX ' END) || p_amount::text || '. New balance: UGX ' || v_new::text || '. Reason: ' || COALESCE(p_reason, 'Administrative adjustment'),
+    false,
+    CASE WHEN p_type = 'add' THEN 'success' ELSE 'info' END,
+    now()
   );
 
   RETURN QUERY SELECT v_prev, v_new;

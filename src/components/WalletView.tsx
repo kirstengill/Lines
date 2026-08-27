@@ -82,6 +82,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
               { id: 'pending', label: `Pending (${pendingCount})` },
               { id: 'deposit', label: 'Deposits' },
               { id: 'withdraw', label: 'Withdrawals' },
+              { id: 'investment', label: 'Investments' },
               { id: 'reward', label: 'Rewards' },
             ].map((tab) => (
               <button

@@ -324,7 +324,7 @@ export default function App() {
 
     // Persist to Supabase as a PENDING transaction (RPC enforces status/balance rules).
     // Do NOT change local balance: it only changes when an admin approves in Supabase.
-    let pendingTxId = '';
+    let createdTx: Transaction | undefined;
     try {
       if (type === 'deposit') {
         const res = await authService.submitDeposit(
@@ -336,6 +336,7 @@ export default function App() {
           alert(res.error || 'Failed to submit request.');
           return;
         }
+        createdTx = res.transaction;
       } else {
         const res = await authService.submitWithdrawal(
           amountUGX,
@@ -346,6 +347,7 @@ export default function App() {
           alert(res.error || 'Failed to submit request.');
           return;
         }
+        createdTx = res.transaction;
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to submit request.');
@@ -353,8 +355,8 @@ export default function App() {
     }
 
     // Optimistic pending entry for instant UI feedback; authoritative state
-    // is reloaded from Supabase by the periodic refresh below.
-    const tx: Transaction = {
+    // is reloaded from Supabase by the refresh below.
+    const tx: Transaction = createdTx || {
       id: `local_${Date.now()}`,
       userId: user?.id,
       username: user?.username,
@@ -370,7 +372,15 @@ export default function App() {
       recipientInfo,
     };
 
-    setTransactions((prev) => [tx, ...prev]);
+    setTransactions((prev) => [tx, ...prev.filter((item) => item.id !== tx.id)]);
+
+    // Trigger instant Supabase refresh to synchronize state across devices
+    authService.refreshUserData().then((refreshed) => {
+      if (refreshed?.data) {
+        setTransactions(refreshed.data.transactions);
+        setWallet(refreshed.data.wallet);
+      }
+    }).catch(() => {});
 
     // 3. User notification
     const newNotif: AppNotification = {

@@ -457,22 +457,30 @@ class AuthService {
             }
           : INITIAL_WALLET;
 
-        const transactions: Transaction[] = (txRes.data || []).map((t: any) => ({
-          id: t.id,
-          userId: t.user_id,
-          username: t.username,
-          userFullName: t.user_full_name,
-          type: t.type || 'deposit',
-          amountUGX: Number(t.amount_ugx),
-          currency: 'UGX',
-          status: t.status,
-          date: new Date(t.created_at).toLocaleDateString(),
-          timestamp: t.timestamp || new Date(t.created_at).getTime(),
-          description: t.description,
-          paymentMethod: t.payment_method,
-          recipientInfo: t.recipient_info,
-          txHash: t.tx_hash,
-        }));
+        const transactions: Transaction[] = (txRes.data || [])
+          .map((t: any) => {
+            const rawTs = Number(t.timestamp) || (t.created_at ? new Date(t.created_at).getTime() : Date.now());
+            const dateStr = t.created_at
+              ? new Date(t.created_at).toLocaleString()
+              : new Date(rawTs).toLocaleString();
+            return {
+              id: t.id,
+              userId: t.user_id,
+              username: t.username || this.currentUser?.username || 'user',
+              userFullName: t.user_full_name || this.currentUser?.fullName || 'User',
+              type: t.type || 'deposit',
+              amountUGX: Number(t.amount_ugx || t.amount || 0),
+              currency: 'UGX' as const,
+              status: (t.status || 'pending') as Transaction['status'],
+              date: dateStr,
+              timestamp: rawTs,
+              description: t.description || `${(t.type || 'Transaction').toUpperCase()} Request`,
+              paymentMethod: t.payment_method || undefined,
+              recipientInfo: t.recipient_info || undefined,
+              txHash: t.tx_hash || undefined,
+            };
+          })
+          .sort((a: Transaction, b: Transaction) => (b.timestamp || 0) - (a.timestamp || 0));
 
         const machines: Machine[] = (machinesRes.data || []).map((m: any) => ({
           id: m.id || m.machine_id,
@@ -570,23 +578,45 @@ class AuthService {
   // ==========================================================
 
   public async submitDeposit(amountUGX: number, paymentMethod: string, referenceInfo?: string) {
-    return supabaseAdmin.submitTransaction({
+    const res = await supabaseAdmin.submitTransaction({
       type: 'deposit',
       amountUGX,
       description: `Deposit — UGX ${amountUGX.toLocaleString()} — Pending`,
       paymentMethod,
       recipientInfo: referenceInfo ?? undefined,
     });
+
+    if (res.success && res.transaction && this.currentUser) {
+      const uid = this.currentUser.id;
+      if (this.memoryUserData[uid]) {
+        this.memoryUserData[uid].transactions = [
+          res.transaction,
+          ...this.memoryUserData[uid].transactions.filter((t) => t.id !== res.transaction!.id),
+        ];
+      }
+    }
+    return res;
   }
 
   public async submitWithdrawal(amountUGX: number, paymentMethod: string, recipientInfo: string) {
-    return supabaseAdmin.submitTransaction({
+    const res = await supabaseAdmin.submitTransaction({
       type: 'withdraw',
       amountUGX,
       description: `Withdrawal — UGX ${amountUGX.toLocaleString()} — Pending`,
       paymentMethod,
       recipientInfo,
     });
+
+    if (res.success && res.transaction && this.currentUser) {
+      const uid = this.currentUser.id;
+      if (this.memoryUserData[uid]) {
+        this.memoryUserData[uid].transactions = [
+          res.transaction,
+          ...this.memoryUserData[uid].transactions.filter((t) => t.id !== res.transaction!.id),
+        ];
+      }
+    }
+    return res;
   }
 
   public async buyInvestment(machineOrId: Partial<Machine> | string, amountUGX?: number) {
@@ -653,7 +683,13 @@ class AuthService {
     userId: string,
     adjustment: { amountUGX: number; type: 'add' | 'deduct'; reason: string }
   ) {
-    return supabaseAdmin.adjustUserBalance(userId, adjustment);
+    const res = await supabaseAdmin.adjustUserBalance(userId, adjustment);
+    if (res.success && res.newBalance !== undefined) {
+      if (this.memoryUserData[userId]) {
+        this.memoryUserData[userId].wallet.totalBalanceUGX = res.newBalance;
+      }
+    }
+    return res;
   }
 
   public async toggleUserStatus(userId: string, status: 'active' | 'blocked') {

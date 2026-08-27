@@ -88,6 +88,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [txPageSize, setTxPageSize] = useState<number>(15);
   const [txCurrentPage, setTxCurrentPage] = useState<number>(1);
 
+  // Auto-refresh interval state (in seconds, default 2s, configurable up to 60s / 1 minute)
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(2);
+  const [isSilentSyncing, setIsSilentSyncing] = useState<boolean>(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+
   // User Management State
   const [usersList, setUsersList] = useState<AdminUserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -156,18 +161,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   );
 
   // 1. Fetch Transactions (from Supabase via RPC & table query)
-  const loadTransactions = async () => {
-    setTxLoading(true);
+  const loadTransactions = async (isBackground = false) => {
+    if (!isBackground) setTxLoading(true);
+    else setIsSilentSyncing(true);
     try {
       const res = await authService.fetchAllTransactions();
       if (res.transactions) {
         setAllTransactions(res.transactions);
         if (res.error) console.warn('Transactions notice:', res.error);
       }
+      setLastRefreshedAt(new Date());
     } catch (e) {
       console.warn('Failed to load transactions', e);
     } finally {
-      setTxLoading(false);
+      if (!isBackground) setTxLoading(false);
+      else setTimeout(() => setIsSilentSyncing(false), 300);
     }
   };
 
@@ -175,24 +183,30 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const loadPendingTransactions = loadTransactions;
 
   // 2. Fetch Users List
-  const loadUsersList = async () => {
-    setUsersLoading(true);
-    setUsersError(null);
+  const loadUsersList = async (isBackground = false) => {
+    if (!isBackground) {
+      setUsersLoading(true);
+      setUsersError(null);
+    } else {
+      setIsSilentSyncing(true);
+    }
     try {
-      console.log('[Admin Dashboard] Fetching registered users from Supabase...');
       const res = await authService.getAdminUsers();
-      console.log('[Admin Dashboard] Supabase users response:', res);
-      if (res.error) {
+      if (res.error && !isBackground) {
         setUsersError(res.error);
       }
       if (res.users) {
         setUsersList(res.users);
       }
+      setLastRefreshedAt(new Date());
     } catch (e: any) {
       console.error('[Admin Dashboard] Failed to load users list:', e);
-      setUsersError(e?.message || 'Unable to load users from Supabase');
+      if (!isBackground) {
+        setUsersError(e?.message || 'Unable to load users from Supabase');
+      }
     } finally {
-      setUsersLoading(false);
+      if (!isBackground) setUsersLoading(false);
+      else setTimeout(() => setIsSilentSyncing(false), 300);
     }
   };
 
@@ -232,8 +246,31 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       loadUsersList();
       loadCatalogProjects();
       loadAuditLogs();
+
+      if (autoRefreshInterval > 0) {
+        const timer = setInterval(() => {
+          loadTransactions(true);
+          loadUsersList(true);
+        }, autoRefreshInterval * 1000);
+
+        return () => clearInterval(timer);
+      }
     }
-  }, [isAuthorizedAdmin]);
+  }, [isAuthorizedAdmin, autoRefreshInterval]);
+
+  useEffect(() => {
+    if (isAuthorizedAdmin) {
+      if (activeSubTab === 'transactions' || activeSubTab === 'multisig') {
+        loadTransactions();
+      } else if (activeSubTab === 'users') {
+        loadUsersList();
+      } else if (activeSubTab === 'projects') {
+        loadCatalogProjects();
+      } else if (activeSubTab === 'audit') {
+        loadAuditLogs();
+      }
+    }
+  }, [activeSubTab, isAuthorizedAdmin]);
 
   // Handle Approve Transaction (Supabase RPC — atomic, idempotent)
   const handleApproveTransaction = async (tx: Transaction) => {
@@ -348,12 +385,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         reason: adjustReason.trim() || 'Admin balance adjustment',
       });
 
-      if (res.error) {
+      if (!res.success && res.error) {
         setAdjustError(res.error);
       } else {
+        const computedNewBal =
+          res.newBalance !== undefined
+            ? res.newBalance
+            : adjustType === 'add'
+            ? adjustingUser.balanceUGX + numAmount
+            : Math.max(0, adjustingUser.balanceUGX - numAmount);
+
+        // Optimistically update users list in UI immediately
+        setUsersList((prev) =>
+          prev.map((u) => (u.id === adjustingUser.id ? { ...u, balanceUGX: computedNewBal } : u))
+        );
+
         confetti({ particleCount: 40, spread: 50 });
         showToast(
-          `Balance adjusted: ${adjustType === 'add' ? '+' : '-'}UGX ${numAmount.toLocaleString()} for @${adjustingUser.username}. New Balance: UGX ${res.newBalance.toLocaleString()}`
+          `Balance adjusted: ${adjustType === 'add' ? '+' : '-'}UGX ${numAmount.toLocaleString()} for @${adjustingUser.username}. New Balance: UGX ${computedNewBal.toLocaleString()}`
         );
         setAdjustingUser(null);
         await loadUsersList();
@@ -667,14 +716,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
 
-          {onBackToUserDashboard && (
-            <button
-              onClick={onBackToUserDashboard}
-              className="bg-white/10 hover:bg-white/20 active:scale-98 text-white px-3.5 py-1.5 rounded-xl text-[12px] font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/10"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Investor View
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Auto-Refresh Frequency Control */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 px-2.5 py-1.5 rounded-xl text-[11.5px] font-bold">
+              <span className="relative flex h-2 w-2">
+                {autoRefreshInterval > 0 ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </>
+                ) : (
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
+                )}
+              </span>
+              <span className="text-slate-400 text-[10.5px]">Sync:</span>
+              <select
+                value={autoRefreshInterval}
+                onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
+                className="bg-transparent text-white font-bold outline-none cursor-pointer text-[11.5px]"
+                title="Adjust automatic refresh interval"
+              >
+                <option value={2} className="bg-slate-900 text-white">2s (Live Sync)</option>
+                <option value={5} className="bg-slate-900 text-white">5s</option>
+                <option value={10} className="bg-slate-900 text-white">10s</option>
+                <option value={15} className="bg-slate-900 text-white">15s</option>
+                <option value={30} className="bg-slate-900 text-white">30s</option>
+                <option value={60} className="bg-slate-900 text-white">1 min (60s)</option>
+                <option value={0} className="bg-slate-900 text-white">Paused (Manual)</option>
+              </select>
+              {isSilentSyncing && (
+                <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin ml-0.5" />
+              )}
+            </div>
+
+            {onBackToUserDashboard && (
+              <button
+                onClick={onBackToUserDashboard}
+                className="bg-white/10 hover:bg-white/20 active:scale-98 text-white px-3.5 py-1.5 rounded-xl text-[12px] font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/10"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Investor View
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Global Metric Badges */}
@@ -875,7 +958,36 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Auto-Refresh Rate for Transactions */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
+                  <span className="relative flex h-2 w-2">
+                    {autoRefreshInterval > 0 ? (
+                      <>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </>
+                    ) : (
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
+                    )}
+                  </span>
+                  <span className="text-slate-500 text-[10.5px]">Refresh:</span>
+                  <select
+                    value={autoRefreshInterval}
+                    onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
+                    className="bg-transparent outline-none cursor-pointer text-slate-800"
+                    title="Change automatic refresh rate (2s up to 1 minute)"
+                  >
+                    <option value={2}>2s (Live)</option>
+                    <option value={5}>5s</option>
+                    <option value={10}>10s</option>
+                    <option value={15}>15s</option>
+                    <option value={30}>30s</option>
+                    <option value={60}>1 min</option>
+                    <option value={0}>Paused</option>
+                  </select>
+                </div>
+
                 {/* Sort selector */}
                 <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
@@ -892,11 +1004,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
 
                 <button
-                  onClick={loadTransactions}
-                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  onClick={() => loadTransactions(false)}
+                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer flex items-center gap-1 text-[11.5px] font-bold"
                   title="Refresh Transactions Ledger"
                 >
-                  <RefreshCw className={`w-4 h-4 ${txLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${txLoading || isSilentSyncing ? 'animate-spin text-blue-600' : ''}`} />
                 </button>
               </div>
             </div>
@@ -1402,7 +1514,36 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Auto-Refresh Rate for Users */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
+                  <span className="relative flex h-2 w-2">
+                    {autoRefreshInterval > 0 ? (
+                      <>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </>
+                    ) : (
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
+                    )}
+                  </span>
+                  <span className="text-slate-500 text-[10.5px]">Refresh:</span>
+                  <select
+                    value={autoRefreshInterval}
+                    onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
+                    className="bg-transparent outline-none cursor-pointer text-slate-800"
+                    title="Change automatic refresh rate (2s up to 1 minute)"
+                  >
+                    <option value={2}>2s (Live)</option>
+                    <option value={5}>5s</option>
+                    <option value={10}>10s</option>
+                    <option value={15}>15s</option>
+                    <option value={30}>30s</option>
+                    <option value={60}>1 min</option>
+                    <option value={0}>Paused</option>
+                  </select>
+                </div>
+
                 {/* User Sort selector */}
                 <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
@@ -1420,11 +1561,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
 
                 <button
-                  onClick={loadUsersList}
-                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  onClick={() => loadUsersList(false)}
+                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer flex items-center gap-1 text-[11.5px] font-bold"
                   title="Refresh Users List"
                 >
-                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${usersLoading || isSilentSyncing ? 'animate-spin text-blue-600' : ''}`} />
                 </button>
               </div>
             </div>
