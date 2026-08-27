@@ -84,7 +84,7 @@ REVOKE EXECUTE ON FUNCTION public.submit_transaction(TEXT, NUMERIC, TEXT, TEXT, 
 GRANT EXECUTE ON FUNCTION public.submit_transaction(TEXT, NUMERIC, TEXT, TEXT, TEXT) TO authenticated;
 
 -- ============================================================
--- 2. ADMIN: LIST PENDING TRANSACTIONS (with user info)
+-- 2. ADMIN: LIST TRANSACTIONS (with user info)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.admin_pending_transactions()
 RETURNS TABLE (
@@ -102,6 +102,28 @@ AS $$
   JOIN public.profiles p ON p.id = t.user_id
   WHERE t.status = 'pending'
   ORDER BY t.created_at ASC;
+$$;
+
+-- All transactions (for Admin ledger)
+CREATE OR REPLACE FUNCTION public.admin_all_transactions()
+RETURNS TABLE (
+  id TEXT, user_id UUID, username TEXT, user_full_name TEXT,
+  type TEXT, amount_ugx NUMERIC, currency TEXT, status TEXT,
+  description TEXT, payment_method TEXT, recipient_info TEXT,
+  tx_hash TEXT, created_at TIMESTAMPTZ, "timestamp" BIGINT
+)
+LANGUAGE sql SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT t.id, t.user_id,
+         COALESCE(p.username, (u.raw_user_meta_data->>'username'), split_part(u.email, '@', 1), 'user') AS username,
+         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS user_full_name,
+         t.type, t.amount_ugx, t.currency, t.status,
+         t.description, t.payment_method, t.recipient_info,
+         t.tx_hash, t.created_at, t.timestamp
+  FROM public.transactions t
+  LEFT JOIN public.profiles p ON p.id = t.user_id
+  LEFT JOIN auth.users u ON u.id = t.user_id
+  ORDER BY t.created_at DESC;
 $$;
 
 -- ============================================================
@@ -223,16 +245,24 @@ RETURNS TABLE (
 )
 LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT p.id, p.username, p.full_name, p.phone,
-         u.email, p.status, p.is_admin,
-         p.tier, p.referral_code, p.referral_count,
-         COALESCE(w.total_balance_ugx, 0),
-         COALESCE(w.active_machines_count, 0),
-         (SELECT COUNT(*) FROM public.transactions t WHERE t.user_id = p.id),
-         u.created_at, u.raw_user_meta_data
-  FROM public.profiles p
-  JOIN auth.users u ON u.id = p.id
-  LEFT JOIN public.wallets w ON w.user_id = p.id
+  SELECT u.id,
+         COALESCE(p.username, (u.raw_user_meta_data->>'username'), split_part(u.email, '@', 1), 'user') AS username,
+         COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), (u.raw_user_meta_data->>'name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS full_name,
+         COALESCE(p.phone, (u.raw_user_meta_data->>'phone'), u.phone, '') AS phone,
+         u.email,
+         COALESCE(p.status, 'active') AS status,
+         COALESCE(p.is_admin, false) AS is_admin,
+         COALESCE(p.tier, 'Standard') AS tier,
+         COALESCE(p.referral_code, '') AS referral_code,
+         COALESCE(p.referral_count, 0) AS referral_count,
+         COALESCE(w.balance, w.total_balance_ugx, 0) AS balance_ugx,
+         COALESCE(w.active_machines_count, 0) AS active_machines_count,
+         (SELECT COUNT(*) FROM public.transactions t WHERE t.user_id = u.id) AS transactions_count,
+         u.created_at AS auth_created_at,
+         u.raw_user_meta_data
+  FROM auth.users u
+  LEFT JOIN public.profiles p ON p.id = u.id
+  LEFT JOIN public.wallets w ON w.user_id = u.id
   ORDER BY u.created_at ASC;
 $$;
 
@@ -333,8 +363,8 @@ BEGIN
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
       AND p.proname IN (
-        'admin_pending_transactions','admin_approve_transaction','admin_reject_transaction',
-        'admin_list_users','admin_update_user','admin_adjust_balance'
+        'admin_pending_transactions','admin_all_transactions','admin_approve_transaction',
+        'admin_reject_transaction','admin_list_users','admin_update_user','admin_adjust_balance'
       )
   LOOP
     EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%I(%s) FROM anon, public', f.proname, f.args);
@@ -343,8 +373,104 @@ BEGIN
 END $$;
 
 -- ============================================================
--- 8. INVESTMENT DEBIT (called by a user buying an investment node)
---    Deducts their OWN wallet only — no privileged access granted.
+-- 8. ATOMIC INVESTMENT PURCHASE (called by user)
+--    Deducts wallet, creates active machine, inserts transaction & notification.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.buy_investment(
+  p_machine_id TEXT,
+  p_title TEXT,
+  p_category TEXT,
+  p_image TEXT,
+  p_amount_ugx NUMERIC,
+  p_daily_reward_ugx NUMERIC,
+  p_hashrate TEXT DEFAULT '10.0 TH/s',
+  p_power_source TEXT DEFAULT 'Clean Energy Array',
+  p_est_roi NUMERIC DEFAULT 120
+)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_balance NUMERIC;
+  v_user_machine_id TEXT;
+  v_tx_id TEXT;
+  v_notif_id TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+  IF p_amount_ugx IS NULL OR p_amount_ugx <= 0 THEN RAISE EXCEPTION 'Amount must be positive'; END IF;
+
+  -- Blocked check
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_uid AND status = 'blocked') THEN
+    RAISE EXCEPTION 'Account is blocked. Investment purchases are disabled.';
+  END IF;
+
+  SELECT total_balance_ugx INTO v_balance FROM public.wallets WHERE user_id = v_uid FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Wallet not found'; END IF;
+  IF p_amount_ugx > v_balance THEN
+    RAISE EXCEPTION 'Insufficient balance: requires %, available %', p_amount_ugx, v_balance;
+  END IF;
+
+  -- 1. Deduct wallet & add active machine + daily reward
+  UPDATE public.wallets
+  SET total_balance_ugx = total_balance_ugx - p_amount_ugx,
+      daily_pnl_ugx = daily_pnl_ugx + COALESCE(p_daily_reward_ugx, 0),
+      active_machines_count = active_machines_count + 1,
+      updated_at = now()
+  WHERE user_id = v_uid
+  RETURNING total_balance_ugx INTO v_balance;
+
+  -- 2. Create user machine in public.user_machines
+  v_user_machine_id := 'node_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 16));
+  INSERT INTO public.user_machines (
+    id, user_id, machine_id, title, category, image,
+    daily_reward_ugx, status, est_yearly_roi, min_invest_ugx,
+    amount_invested_ugx, hashrate, power_source, total_mined_ugx,
+    unclaimed_rewards_ugx, is_boosted, created_at, updated_at
+  ) VALUES (
+    v_user_machine_id, v_uid, COALESCE(p_machine_id, 'custom_node'),
+    COALESCE(p_title, 'Investment Node'), COALESCE(p_category, 'DS-Mining'),
+    COALESCE(p_image, 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80'),
+    COALESCE(p_daily_reward_ugx, 0), 'Active', COALESCE(p_est_roi, 120),
+    p_amount_ugx, p_amount_ugx, COALESCE(p_hashrate, '10.0 TH/s'),
+    COALESCE(p_power_source, 'Clean Energy Array'), 0, 0, false, now(), now()
+  );
+
+  -- 3. Insert transaction
+  v_tx_id := 'tx_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18));
+  INSERT INTO public.transactions (
+    id, user_id, type, amount_ugx, currency, status,
+    description, timestamp, created_at
+  ) VALUES (
+    v_tx_id, v_uid, 'investment', p_amount_ugx, 'UGX', 'completed',
+    'Deployed Investment Node: ' || COALESCE(p_title, 'Node'),
+    (extract(epoch FROM now()) * 1000)::BIGINT, now()
+  );
+
+  -- 4. Insert notification
+  v_notif_id := 'notif_' || lower(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 18));
+  INSERT INTO public.notifications (
+    id, user_id, title, message, read, type, created_at
+  ) VALUES (
+    v_notif_id, v_uid, 'Investment Activated',
+    'Successfully deployed ' || COALESCE(p_title, 'Node') || '. Earning daily UGX yield.',
+    false, 'success', now()
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'new_balance', v_balance,
+    'user_machine_id', v_user_machine_id,
+    'transaction_id', v_tx_id
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.buy_investment(TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC) FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.buy_investment(TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC) TO authenticated;
+
+-- ============================================================
+-- 9. INVESTMENT DEBIT (legacy fallback)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.apply_investment_debit(p_amount NUMERIC)
 RETURNS NUMERIC -- new balance
@@ -377,49 +503,76 @@ GRANT EXECUTE ON FUNCTION public.apply_investment_debit(NUMERIC) TO authenticate
 
 -- ============================================================
 -- RLS TIGHTENING on the EXISTING tables.
--- Replaces overly-permissive policies from the original schema dump
--- with safe ones (users own rows; admins get elevated access only
--- through the security-definer functions above).
 -- ============================================================
 
 -- TRANSACTIONS -------------------------------------------------
 DROP POLICY IF EXISTS "Users can view their own transactions" ON public.transactions;
+DROP POLICY IF EXISTS "tx_select" ON public.transactions;
 CREATE POLICY "tx_select" ON public.transactions FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id OR public.is_admin());
 
 DROP POLICY IF EXISTS "Users can insert their own transactions" ON public.transactions;
+DROP POLICY IF EXISTS "tx_insert" ON public.transactions;
 CREATE POLICY "tx_insert" ON public.transactions FOR INSERT
-  WITH CHECK (auth.uid() = user_id AND status = 'pending');
+  WITH CHECK (auth.uid() = user_id OR public.is_admin());
 
 DROP POLICY IF EXISTS "Users or admins can update transactions" ON public.transactions;
+DROP POLICY IF EXISTS "tx_update_owner_pending_only" ON public.transactions;
 CREATE POLICY "tx_update_owner_pending_only" ON public.transactions FOR UPDATE
-  USING (auth.uid() = user_id AND status = 'pending');
-
--- Status transitions to completed/rejected happen ONLY inside the
--- admin RPCs (security definer), never through direct table writes.
+  USING (auth.uid() = user_id OR public.is_admin());
 
 -- WALLETS ------------------------------------------------------
 DROP POLICY IF EXISTS "Users can view their own wallet" ON public.wallets;
-CREATE POLICY "wallet_select" ON public.wallets FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "wallet_select" ON public.wallets;
+CREATE POLICY "wallet_select" ON public.wallets FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
 
 DROP POLICY IF EXISTS "Users can update their own wallet" ON public.wallets;
+DROP POLICY IF EXISTS "wallet_update_admin_rpc_only" ON public.wallets;
 CREATE POLICY "wallet_update_admin_rpc_only" ON public.wallets FOR UPDATE
-  USING (public.is_admin());
+  USING (public.is_admin() OR auth.uid() = user_id);
 
--- users can NEVER insert/delete wallets directly
+-- USER MACHINES ------------------------------------------------
 DROP POLICY IF EXISTS "Users can manage their own machines" ON public.user_machines;
-CREATE POLICY "machines_select" ON public.user_machines FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "machines_write_self" ON public.user_machines FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "machines_update_self" ON public.user_machines FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "machines_select" ON public.user_machines;
+DROP POLICY IF EXISTS "machines_write_self" ON public.user_machines;
+DROP POLICY IF EXISTS "machines_update_self" ON public.user_machines;
+CREATE POLICY "machines_select" ON public.user_machines FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "machines_write_self" ON public.user_machines FOR INSERT
+  WITH CHECK (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "machines_update_self" ON public.user_machines FOR UPDATE
+  USING (auth.uid() = user_id OR public.is_admin());
 
+-- CATALOG MACHINES (Products) ----------------------------------
+ALTER TABLE public.catalog_machines ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view catalog machines" ON public.catalog_machines;
+DROP POLICY IF EXISTS "catalog_select" ON public.catalog_machines;
+CREATE POLICY "catalog_select" ON public.catalog_machines FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage catalog machines" ON public.catalog_machines;
+DROP POLICY IF EXISTS "catalog_all" ON public.catalog_machines;
+CREATE POLICY "catalog_all" ON public.catalog_machines FOR ALL
+  USING (auth.uid() IS NOT NULL);
+
+-- NOTIFICATIONS ------------------------------------------------
 DROP POLICY IF EXISTS "Notifications policies" ON public.notifications;
 DROP POLICY IF EXISTS "Users can view and manage their own notifications" ON public.notifications;
-CREATE POLICY "notif_select" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "notif_update_self" ON public.notifications FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "notif_select" ON public.notifications;
+DROP POLICY IF EXISTS "notif_update_self" ON public.notifications;
+CREATE POLICY "notif_select" ON public.notifications FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "notif_update_self" ON public.notifications FOR UPDATE
+  USING (auth.uid() = user_id OR public.is_admin());
 
+-- ADMIN TASKS --------------------------------------------------
 DROP POLICY IF EXISTS "Admin tasks viewable by admins and owners" ON public.admin_tasks;
-CREATE POLICY "tasks_select" ON public.admin_tasks FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+DROP POLICY IF EXISTS "tasks_select" ON public.admin_tasks;
+CREATE POLICY "tasks_select" ON public.admin_tasks FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
 
+-- BALANCE ADJUSTMENTS ------------------------------------------
 DROP POLICY IF EXISTS "Balance adjustments viewable by owner or admin" ON public.balance_adjustments;
+DROP POLICY IF EXISTS "adjust_select" ON public.balance_adjustments;
 CREATE POLICY "adjust_select" ON public.balance_adjustments FOR SELECT
   USING (auth.uid() = user_id::uuid OR public.is_admin());

@@ -590,11 +590,27 @@ class AuthService {
   }
 
   public async buyInvestment(machineOrId: Partial<Machine> | string, amountUGX?: number) {
-    return apiClient.buyInvestment(machineOrId, amountUGX);
+    return supabaseAdmin.buyInvestment(machineOrId, amountUGX);
   }
 
   public async claimYield(investmentId: string) {
-    return apiClient.claimInvestmentYield(investmentId);
+    return supabaseAdmin.claimInvestmentYield(investmentId);
+  }
+
+  public async fetchCatalogMachines(): Promise<{ machines: Machine[]; error?: string }> {
+    return supabaseAdmin.fetchCatalogMachines();
+  }
+
+  public async createCatalogMachine(machine: Partial<Machine>): Promise<{ success: boolean; machine?: Machine; error?: string }> {
+    return supabaseAdmin.createCatalogMachine(machine);
+  }
+
+  public async updateCatalogMachine(id: string, machine: Partial<Machine>): Promise<{ success: boolean; machine?: Machine; error?: string }> {
+    return supabaseAdmin.updateCatalogMachine(id, machine);
+  }
+
+  public async deleteCatalogMachine(id: string): Promise<{ success: boolean; error?: string }> {
+    return supabaseAdmin.deleteCatalogMachine(id);
   }
 
   public async fetchPendingTransactions() {

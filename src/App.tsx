@@ -97,7 +97,7 @@ export default function App() {
   // Fetch dynamic catalog
   const loadCatalog = useCallback(async () => {
     try {
-      const res = await apiClient.fetchCatalogMachines();
+      const res = await authService.fetchCatalogMachines();
       if (res.machines && res.machines.length > 0) {
         setCatalogMachines(res.machines);
       }
@@ -220,7 +220,7 @@ export default function App() {
   });
 
   // Action Handlers
-  const handleClaimReward = (machineId: string, amountUGX: number) => {
+  const handleClaimReward = async (machineId: string, amountUGX: number) => {
     if (isBlocked) {
       alert('Your account is currently restricted. Please contact support.');
       return;
@@ -259,6 +259,13 @@ export default function App() {
       type: 'success',
     };
     setNotifications((prev) => [newNotif, ...prev]);
+
+    // Persist claim in Supabase
+    try {
+      await authService.claimYield(machineId);
+    } catch (e) {
+      console.warn('Yield claim persistence notice:', e);
+    }
   };
 
   const handleToggleBoost = (machineId: string) => {
@@ -385,7 +392,19 @@ export default function App() {
       return false;
     }
 
-    // Deduct balance and register active machine
+    // Persist investment to Supabase (atomically deducts wallet, creates user_machine, inserts transaction and notification)
+    try {
+      const res = await authService.buyInvestment(machine, amountUGX);
+      if (!res.success) {
+        alert(res.error || 'Failed to complete investment.');
+        return false;
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to complete investment.');
+      return false;
+    }
+
+    // Optimistic UI updates
     setWallet((prev) => ({
       ...prev,
       totalBalanceUGX: Math.max(0, prev.totalBalanceUGX - amountUGX),
@@ -435,25 +454,6 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
-    // Persist investment to Supabase (kept local optimistic UI as-is)
-    const sb = getSupabaseClient();
-    if (sb && user) {
-      try {
-        await sb.from('transactions').insert({
-          id: newTx.id,
-          user_id: user.id,
-          type: 'investment',
-          amount_ugx: amountUGX,
-          currency: 'UGX',
-          status: 'completed',
-          description: `Deployed Investment Node: ${machine.title}`,
-          timestamp: Date.now(),
-        });
-        await sb.rpc('apply_investment_debit', { p_amount: amountUGX });
-      } catch (e) {
-        console.warn('Investment persistence warning:', e);
-      }
-    }
     return true;
   };
 

@@ -91,6 +91,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   // User Management State
   const [usersList, setUsersList] = useState<AdminUserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'blocked' | 'admin'>('all');
   const [userSortBy, setUserSortBy] = useState<'highest_balance' | 'lowest_balance' | 'name_asc' | 'nodes' | 'newest'>('highest_balance');
@@ -176,13 +177,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   // 2. Fetch Users List
   const loadUsersList = async () => {
     setUsersLoading(true);
+    setUsersError(null);
     try {
+      console.log('[Admin Dashboard] Fetching registered users from Supabase...');
       const res = await authService.getAdminUsers();
+      console.log('[Admin Dashboard] Supabase users response:', res);
+      if (res.error) {
+        setUsersError(res.error);
+      }
       if (res.users) {
         setUsersList(res.users);
       }
-    } catch (e) {
-      console.warn('Failed to load users list', e);
+    } catch (e: any) {
+      console.error('[Admin Dashboard] Failed to load users list:', e);
+      setUsersError(e?.message || 'Unable to load users from Supabase');
     } finally {
       setUsersLoading(false);
     }
@@ -192,30 +200,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const loadCatalogProjects = async () => {
     setCatalogLoading(true);
     try {
-      const sb = getSupabaseClient();
-      if (sb) {
-        const { data } = await sb.from('catalog_machines').select('*').order('created_at', { ascending: false });
-        if (data && data.length > 0) {
-          setCatalogProjects(data.map((m: any) => ({
-            id: m.id,
-            title: m.title,
-            subtitle: m.subtitle,
-            category: m.category || 'DS-Mining',
-            image: m.image,
-            dailyRewardUGX: Number(m.daily_reward_ugx),
-            status: m.status || 'Active',
-            estYearlyROI: Number(m.est_yearly_roi || 0),
-            minInvestUGX: Number(m.min_invest_ugx || 0),
-            hashrate: m.hashrate || '10.0 TH/s',
-            powerSource: m.power_source || 'Grid Power',
-            uptime: m.uptime || '99.9%',
-            temperature: m.temperature || '36.0°C',
-            efficiency: Number(m.efficiency || 98.5),
-            totalMinedUGX: Number(m.total_mined_ugx || 0),
-            unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || 0),
-            isBoosted: Boolean(m.is_boosted),
-          })));
-        }
+      const res = await authService.fetchCatalogMachines();
+      if (res.machines) {
+        setCatalogProjects(res.machines);
       }
     } catch (e) {
       console.warn('Failed to load catalog projects', e);
@@ -430,7 +417,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
-  // Handle Save Project (Create / Edit)
+  // Handle Save Project (Create / Edit in Supabase)
   const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProject) return;
@@ -444,21 +431,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setProjectFormLoading(true);
     try {
       if (isCreatingProject) {
-        const res = await apiClient.createCatalogMachine(editingProject);
+        const res = await authService.createCatalogMachine(editingProject);
         if (res.error) {
           setProjectFormError(res.error);
         } else {
-          showToast(`New Project "${editingProject.title}" added to investment catalog.`);
+          showToast(`New Project "${editingProject.title}" added to investment catalog in Supabase.`);
           setEditingProject(null);
           setIsCreatingProject(false);
           await loadCatalogProjects();
         }
       } else if (editingProject.id) {
-        const res = await apiClient.updateCatalogMachine(editingProject.id, editingProject);
+        const res = await authService.updateCatalogMachine(editingProject.id, editingProject);
         if (res.error) {
           setProjectFormError(res.error);
         } else {
-          showToast(`Project "${editingProject.title}" updated successfully.`);
+          showToast(`Project "${editingProject.title}" updated successfully in Supabase.`);
           setEditingProject(null);
           await loadCatalogProjects();
         }
@@ -471,11 +458,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const handleDeleteProject = async (proj: Machine) => {
-    if (!window.confirm(`Are you sure you want to remove project "${proj.title}" from the active catalog?`)) {
+    if (!window.confirm(`Are you sure you want to remove project "${proj.title}" from the active catalog in Supabase?`)) {
       return;
     }
     try {
-      const res = await apiClient.deleteCatalogMachine(proj.id);
+      const res = await authService.deleteCatalogMachine(proj.id);
       if (res.error) {
         showToast(res.error, 'error');
       } else {
@@ -584,17 +571,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const totalSystemVaultUGX = usersList.reduce((sum, u) => sum + (u.balanceUGX || 0), 0);
 
   // Filtered Users (Search specifically matches Name, User ID / UUID, Username, Phone, Email, Referral)
-  const filteredUsers = usersList.filter((u: any) => {
-    const query = userSearchQuery.trim().toLowerCase();
-    const matchesSearch =
-      !query ||
-      u.id?.toLowerCase().includes(query) ||
-      u.username?.toLowerCase().includes(query) ||
-      u.fullName?.toLowerCase().includes(query) ||
-      (u.phone && u.phone.toLowerCase().includes(query)) ||
-      (u.email && u.email.toLowerCase().includes(query)) ||
-      (u.referralCode && u.referralCode.toLowerCase().includes(query));
-
+  const filteredUsers = usersList.filter((u) => {
     const matchesStatus =
       userStatusFilter === 'all'
         ? true
@@ -605,6 +582,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         : userStatusFilter === 'admin'
         ? u.isAdmin || u.role === 'admin'
         : true;
+
+    const query = userSearchQuery.trim().toLowerCase();
+    if (!query) return matchesStatus;
+
+    const matchesSearch =
+      (u.id ?? '').toLowerCase().includes(query) ||
+      (u.username ?? '').toLowerCase().includes(query) ||
+      (u.fullName ?? '').toLowerCase().includes(query) ||
+      (u.phone ?? '').toLowerCase().includes(query) ||
+      ((u as any).email ?? '').toLowerCase().includes(query) ||
+      (u.referralCode ?? '').toLowerCase().includes(query);
 
     return matchesSearch && matchesStatus;
   });
@@ -1521,14 +1509,41 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
               <p className="text-[13px] font-bold">Loading users from Supabase ledger...</p>
             </div>
+          ) : usersError ? (
+            <div className="bg-red-50/70 border border-red-200 rounded-3xl p-6 text-center space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 border border-red-200 text-red-600 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-[15px] font-black text-red-950">Unable to load users from Supabase</h4>
+                <p className="text-[12px] text-red-600 mt-1 font-medium">
+                  An error occurred while querying the database user records.
+                </p>
+              </div>
+              <div className="bg-red-100/60 p-3 rounded-xl border border-red-200/80 max-w-md mx-auto">
+                <p className="text-[12px] font-mono text-red-800 break-words leading-relaxed">
+                  {usersError}
+                </p>
+              </div>
+              <button
+                onClick={loadUsersList}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[12.5px] font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" /> Retry Loading Users
+              </button>
+            </div>
           ) : paginatedUsers.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-xs space-y-2">
               <Users className="w-10 h-10 text-slate-300 mx-auto" />
-              <h4 className="text-[14px] font-bold text-slate-800">No matching users found</h4>
+              <h4 className="text-[14px] font-bold text-slate-800">
+                {usersList.length === 0 ? 'No registered users found' : 'No matching users found'}
+              </h4>
               <p className="text-[12px] text-slate-500 max-w-sm mx-auto">
-                No registered accounts match your name, user ID, or status filter.
+                {usersList.length === 0
+                  ? 'There are currently no registered user accounts in the Supabase database.'
+                  : 'No registered accounts match your search query or status filter.'}
               </p>
-              {(userSearchQuery || userStatusFilter !== 'all') && (
+              {(userSearchQuery || userStatusFilter !== 'all') && usersList.length > 0 && (
                 <button
                   onClick={() => {
                     setUserSearchQuery('');
@@ -1566,7 +1581,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               : 'bg-gradient-to-tr from-slate-700 to-slate-900'
                           }`}
                         >
-                          {u.fullName ? u.fullName.charAt(0).toUpperCase() : u.username.charAt(0).toUpperCase()}
+                          {(u.fullName || u.username || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
