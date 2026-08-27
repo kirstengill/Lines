@@ -28,16 +28,10 @@ import { MeProfileView } from './components/MeProfileView';
 import { ReferralView } from './components/ReferralView';
 
 import {
-  INITIAL_MACHINES,
-  INITIAL_WALLET,
-  INITIAL_TRANSACTIONS,
-  INITIAL_ADMIN_TASKS,
-  INITIAL_NOTIFICATIONS,
   AVAILABLE_CATALOG,
 } from './data/initialData';
 import { Machine, WalletState, Transaction, AdminTask, AppNotification, UserProfile } from './types';
 import { authService, UserAccountData } from './services/supabaseAuth';
-import { apiClient } from './services/apiClient';
 import { getSupabaseClient } from './services/supabase';
 import { Lock, AlertTriangle } from 'lucide-react';
 
@@ -78,7 +72,7 @@ export default function App() {
 
   // Application Data States
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [wallet, setWallet] = useState<WalletState>(INITIAL_WALLET);
+  const [wallet, setWallet] = useState<WalletState>({ totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -116,7 +110,7 @@ export default function App() {
         if (isMounted) {
           if (restoredUser && restoredData) {
             setUser(restoredUser);
-            setWallet(restoredData.wallet || INITIAL_WALLET);
+            setWallet(restoredData.wallet || { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
             setTransactions(restoredData.transactions || []);
             setMachines(restoredData.machines || []);
             setAdminTasks(restoredData.adminTasks || []);
@@ -162,7 +156,7 @@ export default function App() {
           setUser(refreshed.user);
         }
         if (refreshed.data) {
-          setWallet(refreshed.data.wallet || INITIAL_WALLET);
+          setWallet(refreshed.data.wallet || { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
           setTransactions(refreshed.data.transactions || []);
           setMachines(refreshed.data.machines || []);
           setNotifications(refreshed.data.notifications || []);
@@ -225,47 +219,13 @@ export default function App() {
       alert('Your account is currently restricted. Please contact support.');
       return;
     }
-    setWallet((prev) => ({
-      ...prev,
-      totalBalanceUGX: prev.totalBalanceUGX + amountUGX,
-    }));
-
-    setMachines((prev) =>
-      prev.map((m) =>
-        m.id === machineId
-          ? { ...m, unclaimedRewardsUGX: 0, totalMinedUGX: m.totalMinedUGX + amountUGX }
-          : m
-      )
-    );
-
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`,
-      type: 'reward',
-      amountUGX: amountUGX,
-      currency: 'UGX',
-      date: 'Just now',
-      status: 'completed',
-      description: `Harvested Mining Yield (${machineId})`,
-      txHash: `0x${Math.random().toString(16).substring(2, 10)}...ugx`,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-
-    const newNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      title: 'Harvest Successful',
-      message: `Credited UGX ${amountUGX.toLocaleString()} to Consolidated Wallet.`,
-      timestamp: 'Just now',
-      read: false,
-      type: 'success',
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-
-    // Persist claim in Supabase
-    try {
-      await authService.claimYield(machineId);
-    } catch (e) {
-      console.warn('Yield claim persistence notice:', e);
+    // Supabase is authoritative: claim_reward RPC atomically zeroes unclaimed
+    // rewards, credits the wallet and records the transaction + notification.
+    const res = await authService.claimYield(machineId);
+    if (!res?.success) {
+      alert(res?.error || 'Failed to claim reward.');
     }
+    await handleRefreshUserData();
   };
 
   const handleToggleBoost = (machineId: string) => {
@@ -322,78 +282,34 @@ export default function App() {
       return;
     }
 
-    // Persist to Supabase as a PENDING transaction (RPC enforces status/balance rules).
-    // Do NOT change local balance: it only changes when an admin approves in Supabase.
-    let createdTx: Transaction | undefined;
+    // Supabase is authoritative: submit_transaction RPC creates the PENDING
+    // transaction + notification in the DB. Balance only changes on approval.
     try {
+      let res;
       if (type === 'deposit') {
-        const res = await authService.submitDeposit(
+        res = await authService.submitDeposit(
           amountUGX,
           paymentMethod || 'MTN Mobile Money',
           recipientInfo
         );
-        if (!res.success) {
-          alert(res.error || 'Failed to submit request.');
-          return;
-        }
-        createdTx = res.transaction;
       } else {
-        const res = await authService.submitWithdrawal(
+        res = await authService.submitWithdrawal(
           amountUGX,
           paymentMethod || 'MTN Mobile Money',
           recipientInfo || 'Mobile Wallet'
         );
-        if (!res.success) {
-          alert(res.error || 'Failed to submit request.');
-          return;
-        }
-        createdTx = res.transaction;
+      }
+      if (!res.success) {
+        alert(res.error || 'Failed to submit request.');
+        return;
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to submit request.');
       return;
     }
 
-    // Optimistic pending entry for instant UI feedback; authoritative state
-    // is reloaded from Supabase by the refresh below.
-    const tx: Transaction = createdTx || {
-      id: `local_${Date.now()}`,
-      userId: user?.id,
-      username: user?.username,
-      userFullName: user?.fullName,
-      type,
-      amountUGX,
-      currency: 'UGX',
-      date: 'Just now',
-      timestamp: Date.now(),
-      status: 'pending', // Strictly pending until admin approval
-      description: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — UGX ${amountUGX.toLocaleString()} — Pending`,
-      paymentMethod,
-      recipientInfo,
-    };
-
-    setTransactions((prev) => [tx, ...prev.filter((item) => item.id !== tx.id)]);
-
-    // Trigger instant Supabase refresh to synchronize state across devices
-    authService.refreshUserData().then((refreshed) => {
-      if (refreshed?.data) {
-        setTransactions(refreshed.data.transactions);
-        setWallet(refreshed.data.wallet);
-      }
-    }).catch(() => {});
-
-    // 3. User notification
-    const newNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      title: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} — UGX ${amountUGX.toLocaleString()} — Pending`,
-      message: `Your ${type} request of UGX ${amountUGX.toLocaleString()} is pending administrator verification and approval. Balance will update upon authorization.`,
-      timestamp: 'Just now',
-      read: false,
-      type: 'info',
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-
-    // Remove now-redundant REST submission: already persisted above via Supabase.
+    // Reload real state from Supabase so the pending tx + notification appear.
+    await handleRefreshUserData();
   };
 
   const handleConfirmInvest = async (machine: Machine, amountUGX: number): Promise<boolean> => {
@@ -402,7 +318,9 @@ export default function App() {
       return false;
     }
 
-    // Persist investment to Supabase (atomically deducts wallet, creates user_machine, inserts transaction and notification)
+    // Supabase is authoritative: buy_investment RPC atomically verifies catalog
+    // + balance, deducts the wallet, creates the user_machine, transaction and
+    // notification. Nothing is shown as succeeded unless the DB confirms it.
     try {
       const res = await authService.buyInvestment(machine, amountUGX);
       if (!res.success) {
@@ -414,56 +332,8 @@ export default function App() {
       return false;
     }
 
-    // Optimistic UI updates
-    setWallet((prev) => ({
-      ...prev,
-      totalBalanceUGX: Math.max(0, prev.totalBalanceUGX - amountUGX),
-      activeMachinesCount: prev.activeMachinesCount + 1,
-    }));
-
-    const existingIndex = machines.findIndex((m) => m.id === machine.id);
-    let updatedMachines: Machine[];
-    if (existingIndex >= 0) {
-      updatedMachines = machines.map((m) =>
-        m.id === machine.id
-          ? { ...m, status: 'Active' as const, minInvestUGX: amountUGX }
-          : m
-      );
-    } else {
-      const newActiveNode: Machine = {
-        ...machine,
-        id: `node_${Date.now()}`,
-        status: 'Active',
-        minInvestUGX: amountUGX,
-        totalMinedUGX: 0,
-        unclaimedRewardsUGX: 0,
-      };
-      updatedMachines = [newActiveNode, ...machines];
-    }
-    setMachines(updatedMachines);
-
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`,
-      type: 'investment',
-      amountUGX: amountUGX,
-      currency: 'UGX',
-      date: 'Just now',
-      status: 'completed',
-      description: `Deployed Investment Node: ${machine.title}`,
-      txHash: `0x${Math.random().toString(16).substring(2, 10)}...ugx`,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-
-    const newNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      title: 'Investment Activated',
-      message: `Successfully deployed ${machine.title}. Earning daily UGX yield.`,
-      timestamp: 'Just now',
-      read: false,
-      type: 'success',
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-
+    // Reload real state from Supabase so balance/investment reflect the DB.
+    await handleRefreshUserData();
     return true;
   };
 

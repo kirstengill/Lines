@@ -15,14 +15,6 @@ import {
   AdminUserSummary,
   BalanceAdjustment,
 } from '../types';
-import {
-  INITIAL_MACHINES,
-  INITIAL_WALLET,
-  INITIAL_TRANSACTIONS,
-  INITIAL_ADMIN_TASKS,
-  INITIAL_NOTIFICATIONS,
-} from '../data/initialData';
-import { apiClient } from './apiClient';
 import { supabaseAdmin } from './supabaseAdmin';
 import { getSupabaseClient } from './supabase';
 
@@ -63,7 +55,7 @@ class AuthService {
           if (session?.access_token) {
             this.accessToken = session.access_token;
             if (this.currentUser) {
-              apiClient.setSession(session.access_token, this.currentUser.id);
+              
             }
           }
         });
@@ -99,9 +91,9 @@ class AuthService {
     this.currentUser = user;
     if (user) {
       // REST data endpoints receive the real Supabase Auth session token
-      apiClient.setSession(accessToken ?? this.accessToken, user.id);
+      
     } else {
-      apiClient.setSession(null, null);
+      
     }
   }
 
@@ -214,7 +206,7 @@ class AuthService {
 
     const dataRes = await this.refreshUserData();
     const accountData = dataRes.data || {
-      wallet: INITIAL_WALLET,
+      wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
@@ -287,7 +279,20 @@ class AuthService {
       };
     }
 
-    // Profile + wallet are auto-created by the on_auth_user_created DB trigger.
+    // Process referral (link profiles, credit referrer, record tx + notification).
+    // Safe to call repeatedly: the DB function is idempotent per new user.
+    if (referralCode && referralCode.trim()) {
+      try {
+        const refRes = await this.processReferral(referralCode);
+        if (!refRes.applied && refRes.reason && refRes.reason !== 'no_code' && refRes.reason !== 'already_processed') {
+          console.warn('Referral not applied:', refRes.reason);
+        }
+      } catch (e) {
+        console.warn('Referral processing warning:', e);
+      }
+    }
+
+    // Profile + wallet + welcome bonus are auto-created by the on_auth_user_created DB trigger.
     let profile = await this.fetchProfileFromSupabase(authData.user);
     if (!profile && this.client) {
       // Trigger may complete asynchronously; retry briefly.
@@ -305,7 +310,7 @@ class AuthService {
 
     const dataRes = await this.refreshUserData();
     const userData = dataRes.data || {
-      wallet: INITIAL_WALLET,
+      wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
@@ -334,7 +339,7 @@ class AuthService {
         // Ignore signout error
       }
     }
-    apiClient.setSession(null, null);
+    
     this.currentUser = null;
     this.accessToken = null;
     this.memoryUserData = {};
@@ -442,7 +447,7 @@ class AuthService {
           const { data: { session } } = await this.client.auth.getSession();
           if (session?.access_token && this.currentUser) {
             this.accessToken = session.access_token;
-            apiClient.setSession(session.access_token, this.currentUser.id);
+            
           }
         } catch {
           // ignore
@@ -455,7 +460,7 @@ class AuthService {
               activeMachinesCount: Number(walletRes.data.active_machines_count) || 0,
               pendingTasksCount: Number(walletRes.data.pending_tasks_count) || 0,
             }
-          : INITIAL_WALLET;
+          : { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 };
 
         const transactions: Transaction[] = (txRes.data || [])
           .map((t: any) => {
@@ -556,11 +561,11 @@ class AuthService {
 
   public saveUserData(userId: string, data: Partial<UserAccountData>) {
     const existing = this.memoryUserData[userId] || {
-      wallet: INITIAL_WALLET,
-      transactions: INITIAL_TRANSACTIONS,
-      machines: INITIAL_MACHINES,
-      adminTasks: INITIAL_ADMIN_TASKS,
-      notifications: INITIAL_NOTIFICATIONS,
+      wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+      transactions: [],
+      machines: [],
+      adminTasks: [],
+      notifications: [],
     };
 
     const updated = {
@@ -569,8 +574,28 @@ class AuthService {
     };
     this.memoryUserData[userId] = updated;
 
-    // Async push to backend / Supabase
-    apiClient.syncUserData(updated).catch(() => {});
+    // Supabase is the single source of truth. No in-memory/REST sync fallback.
+    // All financial mutations go through Supabase RPCs; this cache is display-only.
+  }
+
+  // ==========================================================
+  // REFERRAL PROCESSING (called once after signup)
+  // ==========================================================
+
+  public async processReferral(referralCode: string): Promise<{ applied: boolean; reason?: string; error?: string }> {
+    const sb = this.client;
+    if (!sb) return { applied: false, error: 'Database not configured' };
+    if (!referralCode || !referralCode.trim()) return { applied: false, reason: 'no_code' };
+    try {
+      const { data, error } = await sb.rpc('process_referral', { p_referral_code: referralCode.trim() });
+      if (error) return { applied: false, error: error.message };
+      return {
+        applied: Boolean(data?.applied),
+        reason: data?.reason || undefined,
+      };
+    } catch (e: any) {
+      return { applied: false, error: e?.message || 'Referral processing failed' };
+    }
   }
 
   // ==========================================================

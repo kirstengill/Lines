@@ -178,162 +178,31 @@ export const supabaseAdmin = {
         };
       }
 
-      // 2. Direct fallback if RPC is not present
-      const { data: authData } = await sb.auth.getUser();
-      const userId = authData?.user?.id;
-      if (!userId) return { success: false, error: 'Not authenticated' };
-
-      // Check current wallet
-      const { data: walletRow } = await sb
-        .from('wallets')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      const currentBalance = Number(walletRow?.total_balance_ugx ?? walletRow?.balance ?? 0);
-      if (currentBalance < cost) {
-        return {
-          success: false,
-          error: `Insufficient balance. Required: UGX ${cost.toLocaleString()}, Available: UGX ${currentBalance.toLocaleString()}.`,
-        };
-      }
-
-      const newBalance = currentBalance - cost;
-      const newActiveCount = Number(walletRow?.active_machines_count || 0) + 1;
-      const newDailyPnl = Number(walletRow?.daily_pnl_ugx || 0) + Number(machineObj.dailyRewardUGX || 0);
-
-      // Update wallet
-      await sb
-        .from('wallets')
-        .update({
-          total_balance_ugx: newBalance,
-          daily_pnl_ugx: newDailyPnl,
-          active_machines_count: newActiveCount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
-
-      // Insert user machine
-      const nodeMachineId = `node_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      await sb.from('user_machines').insert({
-        id: nodeMachineId,
-        user_id: userId,
-        machine_id: machineObj.id || 'custom_node',
-        title: machineObj.title || 'Investment Node',
-        category: machineObj.category || 'DS-Mining',
-        image: machineObj.image || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-        daily_reward_ugx: Number(machineObj.dailyRewardUGX || 0),
-        status: 'Active',
-        est_yearly_roi: Number(machineObj.estYearlyROI || 120),
-        min_invest_ugx: cost,
-        amount_invested_ugx: cost,
-        hashrate: machineObj.hashrate || '10.0 TH/s',
-        power_source: machineObj.powerSource || 'Clean Energy Array',
-        total_mined_ugx: 0,
-        unclaimed_rewards_ugx: 0,
-        is_boosted: Boolean(machineObj.isBoosted),
-      });
-
-      // Insert transaction
-      const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      await sb.from('transactions').insert({
-        id: txId,
-        user_id: userId,
-        type: 'investment',
-        amount_ugx: cost,
-        currency: 'UGX',
-        status: 'completed',
-        description: `Deployed Investment Node: ${machineObj.title || 'Node'}`,
-        timestamp: Date.now(),
-        created_at: new Date().toISOString(),
-      });
-
-      // Insert notification
-      await sb.from('notifications').insert({
-        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        user_id: userId,
-        title: 'Investment Activated',
-        message: `Successfully deployed ${machineObj.title || 'Node'}. Earning daily UGX yield.`,
-        read: false,
-        type: 'success',
-      });
-
-      return {
-        success: true,
-        newBalance,
-        investment: {
-          id: nodeMachineId,
-          machineId: machineObj.id,
-          title: machineObj.title,
-          amountInvestedUGX: cost,
-        },
-      };
+      // No fallback: the purchase must be atomic (wallet debit + machine +
+      // transaction + notification). If the RPC is missing/fails we refuse.
+      return { success: false, error: rpcError ? translate(rpcError.message) : 'Investment failed.' };
     } catch (e: any) {
       console.error('[Supabase Admin] buyInvestment error:', e);
       return { success: false, error: e?.message || 'Investment failed.' };
     }
   },
 
-  // ---------- CLAIM INVESTMENT YIELD ----------
+  // ---------- CLAIM INVESTMENT YIELD (atomic via claim_reward RPC) ----------
   async claimInvestmentYield(userMachineId: string): Promise<{ success: boolean; claimedUGX?: number; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();
     if (!sb) return { success: false, error: 'Database not configured' };
 
     try {
-      const { data: authData } = await sb.auth.getUser();
-      const userId = authData?.user?.id;
-      if (!userId) return { success: false, error: 'Not authenticated' };
-
-      const { data: machineRow } = await sb
-        .from('user_machines')
-        .select('*')
-        .eq('id', userMachineId)
-        .eq('user_id', userId)
-        .single();
-
-      if (!machineRow) return { success: false, error: 'Investment machine not found' };
-
-      const unclaimed = Number(machineRow.unclaimed_rewards_ugx || 0);
-      if (unclaimed <= 0) return { success: false, error: 'No accumulated yield available to claim at this time.' };
-
-      // Update machine
-      const totalMined = Number(machineRow.total_mined_ugx || 0) + unclaimed;
-      await sb
-        .from('user_machines')
-        .update({
-          unclaimed_rewards_ugx: 0,
-          total_mined_ugx: totalMined,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userMachineId);
-
-      // Credit wallet
-      const { data: walletRow } = await sb.from('wallets').select('*').eq('user_id', userId).single();
-      const currentBalance = Number(walletRow?.total_balance_ugx ?? walletRow?.balance ?? 0);
-      const newBalance = currentBalance + unclaimed;
-
-      await sb
-        .from('wallets')
-        .update({
-          total_balance_ugx: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
-
-      // Insert reward transaction
-      await sb.from('transactions').insert({
-        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        user_id: userId,
-        type: 'reward',
-        amount_ugx: unclaimed,
-        currency: 'UGX',
-        status: 'completed',
-        description: `Mined Hash Yield Claimed: ${machineRow.title}`,
-        timestamp: Date.now(),
-        created_at: new Date().toISOString(),
-      });
-
-      return { success: true, claimedUGX: unclaimed, newBalance };
+      const { data, error } = await sb.rpc('claim_reward', { p_user_machine_id: userMachineId });
+      if (error) return { success: false, error: translate(error.message) };
+      if (!data?.success) {
+        return { success: false, error: 'No accumulated yield available to claim at this time.' };
+      }
+      return {
+        success: true,
+        claimedUGX: Number(data.claimed_ugx || 0),
+        newBalance: Number(data.new_balance || 0),
+      };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to claim yield' };
     }
