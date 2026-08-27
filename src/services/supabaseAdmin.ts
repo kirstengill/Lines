@@ -66,6 +66,58 @@ export const supabaseAdmin = {
     };
   },
 
+  // ---------- ADMIN: ALL TRANSACTIONS (WITH STATUSES & PROFILES) ----------
+  async fetchAllTransactions(): Promise<{ transactions: Transaction[]; error?: string }> {
+    const sb = getSupabaseClient();
+    if (!sb) return { transactions: [], error: 'Database not configured' };
+
+    try {
+      const { data, error } = await sb
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error) {
+        // Fallback to pending transactions RPC if direct select is restricted
+        return this.fetchPendingTransactions();
+      }
+
+      // Fetch user profile map to enrich with usernames and names
+      const { data: profiles } = await sb.from('profiles').select('id, username, full_name');
+      const profileMap = new Map<string, { username: string; full_name?: string }>();
+      if (profiles) {
+        profiles.forEach((p: any) => {
+          profileMap.set(p.id, { username: p.username, full_name: p.full_name });
+        });
+      }
+
+      return {
+        transactions: (data || []).map((t: any) => {
+          const profile = profileMap.get(t.user_id);
+          return {
+            id: t.id,
+            userId: t.user_id,
+            username: profile?.username || t.username || 'user',
+            userFullName: profile?.full_name || t.user_full_name,
+            type: t.type,
+            amountUGX: Number(t.amount_ugx),
+            currency: 'UGX' as const,
+            status: (t.status || 'pending') as Transaction['status'],
+            date: new Date(t.created_at || t.timestamp || Date.now()).toLocaleString(),
+            timestamp: t.timestamp || (t.created_at ? new Date(t.created_at).getTime() : undefined),
+            description: t.description || '',
+            paymentMethod: t.payment_method || undefined,
+            recipientInfo: t.recipient_info || undefined,
+            txHash: t.tx_hash || undefined,
+          };
+        }),
+      };
+    } catch (e: any) {
+      return this.fetchPendingTransactions();
+    }
+  },
+
   // ---------- ADMIN: APPROVE / REJECT ----------
   async approveTransaction(txId: string): Promise<{ success: boolean; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();

@@ -30,7 +30,16 @@ import {
   Phone,
   Calendar,
   Mail,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  CheckCheck,
+  SlidersHorizontal,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Hash,
+  Tag,
+  Wallet
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -68,18 +77,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [rewardMultiplier, setRewardMultiplier] = useState<number>(1.0);
   const [systemSyncing, setSystemSyncing] = useState(false);
 
-  // Pending Transactions State
-  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
+  // Transactions State (All, Pending, Completed, Rejected)
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [txFilter, setTxFilter] = useState<'all' | 'deposit' | 'withdraw'>('all');
+  const [txStatusFilter, setTxStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all');
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'deposit' | 'withdraw' | 'investment' | 'bonus'>('all');
   const [txSearchQuery, setTxSearchQuery] = useState('');
+  const [txSortBy, setTxSortBy] = useState<'newest' | 'oldest' | 'highest_amount' | 'lowest_amount'>('newest');
+  const [txPageSize, setTxPageSize] = useState<number>(15);
+  const [txCurrentPage, setTxCurrentPage] = useState<number>(1);
 
   // User Management State
   const [usersList, setUsersList] = useState<AdminUserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'blocked' | 'admin'>('all');
+  const [userSortBy, setUserSortBy] = useState<'highest_balance' | 'lowest_balance' | 'name_asc' | 'nodes' | 'newest'>('highest_balance');
+  const [userPageSize, setUserPageSize] = useState<number>(15);
+  const [userCurrentPage, setUserCurrentPage] = useState<number>(1);
+
+  // Clipboard copy state
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // User Management Modals
   const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
@@ -122,25 +141,37 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const handleCopyText = (text: string, key: string, label: string = 'ID') => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedId(key);
+      setTimeout(() => setCopiedId(null), 2000);
+      showToast(`Copied ${label} to clipboard: ${text}`, 'info');
+    }
+  };
+
   const isAuthorizedAdmin = Boolean(
     currentUser && (currentUser.isAdmin === true || currentUser.role === 'admin')
   );
 
-  // 1. Fetch Pending Transactions (from Supabase via RPC)
-  const loadPendingTransactions = async () => {
+  // 1. Fetch Transactions (from Supabase via RPC & table query)
+  const loadTransactions = async () => {
     setTxLoading(true);
     try {
-      const res = await authService.fetchPendingTransactions();
+      const res = await authService.fetchAllTransactions();
       if (res.transactions) {
-        setPendingTransactions(res.transactions);
-        if (res.error) console.warn('Pending transactions:', res.error);
+        setAllTransactions(res.transactions);
+        if (res.error) console.warn('Transactions notice:', res.error);
       }
     } catch (e) {
-      console.warn('Failed to load pending transactions', e);
+      console.warn('Failed to load transactions', e);
     } finally {
       setTxLoading(false);
     }
   };
+
+  // Backwards-compatible alias
+  const loadPendingTransactions = loadTransactions;
 
   // 2. Fetch Users List
   const loadUsersList = async () => {
@@ -470,27 +501,99 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }, 1000);
   };
 
+  // Derived metrics for Transactions
+  const pendingTxCount = allTransactions.filter((t) => t.status === 'pending').length;
+  const completedTxCount = allTransactions.filter((t) => t.status === 'completed' || t.status === 'approved').length;
+  const rejectedTxCount = allTransactions.filter((t) => t.status === 'rejected').length;
+  const depositTxCount = allTransactions.filter((t) => t.type === 'deposit').length;
+  const withdrawTxCount = allTransactions.filter((t) => t.type === 'withdraw').length;
+  const totalVolumeUGX = allTransactions.reduce((sum, t) => sum + (t.amountUGX || 0), 0);
+  const totalPendingAmountUGX = allTransactions
+    .filter((t) => t.status === 'pending')
+    .reduce((sum, t) => sum + (t.amountUGX || 0), 0);
+  const totalSettledAmountUGX = allTransactions
+    .filter((t) => t.status === 'completed' || t.status === 'approved')
+    .reduce((sum, t) => sum + (t.amountUGX || 0), 0);
+
   // Filtered Transactions
-  const filteredTransactions = pendingTransactions.filter((tx) => {
-    const matchesFilter =
-      txFilter === 'all' ? true : tx.type === txFilter;
+  const filteredTransactions = allTransactions.filter((tx) => {
+    // 1. Status Filter
+    const matchesStatus =
+      txStatusFilter === 'all'
+        ? true
+        : txStatusFilter === 'pending'
+        ? tx.status === 'pending'
+        : txStatusFilter === 'completed'
+        ? tx.status === 'completed' || tx.status === 'approved'
+        : txStatusFilter === 'rejected'
+        ? tx.status === 'rejected'
+        : true;
+
+    // 2. Type Filter
+    const matchesType =
+      txTypeFilter === 'all'
+        ? true
+        : txTypeFilter === 'deposit'
+        ? tx.type === 'deposit'
+        : txTypeFilter === 'withdraw'
+        ? tx.type === 'withdraw'
+        : txTypeFilter === 'investment'
+        ? tx.type === 'investment'
+        : txTypeFilter === 'bonus'
+        ? tx.type === 'bonus' || tx.type === 'reward'
+        : true;
+
+    // 3. Search Query (matches Tx ID, User ID, Username, Full Name, Description, Recipient, Payment Method, Amount, TxHash)
+    const query = txSearchQuery.trim().toLowerCase();
     const matchesSearch =
-      tx.id.toLowerCase().includes(txSearchQuery.toLowerCase()) ||
-      (tx.username && tx.username.toLowerCase().includes(txSearchQuery.toLowerCase())) ||
-      (tx.description && tx.description.toLowerCase().includes(txSearchQuery.toLowerCase())) ||
-      (tx.recipientInfo && tx.recipientInfo.toLowerCase().includes(txSearchQuery.toLowerCase())) ||
-      tx.amountUGX.toString().includes(txSearchQuery);
-    return matchesFilter && matchesSearch;
+      !query ||
+      tx.id.toLowerCase().includes(query) ||
+      (tx.userId && tx.userId.toLowerCase().includes(query)) ||
+      (tx.username && tx.username.toLowerCase().includes(query)) ||
+      (tx.userFullName && tx.userFullName.toLowerCase().includes(query)) ||
+      (tx.description && tx.description.toLowerCase().includes(query)) ||
+      (tx.recipientInfo && tx.recipientInfo.toLowerCase().includes(query)) ||
+      (tx.paymentMethod && tx.paymentMethod.toLowerCase().includes(query)) ||
+      (tx.txHash && tx.txHash.toLowerCase().includes(query)) ||
+      tx.amountUGX.toString().includes(query);
+
+    return matchesStatus && matchesType && matchesSearch;
   });
 
-  // Filtered Users (search also matches the Auth email)
+  // Sorted Transactions
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    if (txSortBy === 'highest_amount') return b.amountUGX - a.amountUGX;
+    if (txSortBy === 'lowest_amount') return a.amountUGX - b.amountUGX;
+    const timeA = a.timestamp || (a.date ? new Date(a.date).getTime() : 0);
+    const timeB = b.timestamp || (b.date ? new Date(b.date).getTime() : 0);
+    if (txSortBy === 'oldest') return timeA - timeB;
+    return timeB - timeA; // newest default
+  });
+
+  const totalTxPages = Math.max(1, Math.ceil(sortedTransactions.length / txPageSize));
+  const currentTxPage = Math.min(txCurrentPage, totalTxPages);
+  const paginatedTransactions = sortedTransactions.slice(
+    (currentTxPage - 1) * txPageSize,
+    currentTxPage * txPageSize
+  );
+
+  // Derived metrics for Users
+  const activeUsersCount = usersList.filter((u) => u.status === 'active').length;
+  const blockedUsersCount = usersList.filter((u) => u.status === 'blocked').length;
+  const adminUsersCount = usersList.filter((u) => u.isAdmin || u.role === 'admin').length;
+  const totalSystemVaultUGX = usersList.reduce((sum, u) => sum + (u.balanceUGX || 0), 0);
+
+  // Filtered Users (Search specifically matches Name, User ID / UUID, Username, Phone, Email, Referral)
   const filteredUsers = usersList.filter((u: any) => {
+    const query = userSearchQuery.trim().toLowerCase();
     const matchesSearch =
-      u.username?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      u.fullName?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      (u.phone && u.phone.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      u.id?.toLowerCase().includes(userSearchQuery.toLowerCase());
+      !query ||
+      u.id?.toLowerCase().includes(query) ||
+      u.username?.toLowerCase().includes(query) ||
+      u.fullName?.toLowerCase().includes(query) ||
+      (u.phone && u.phone.toLowerCase().includes(query)) ||
+      (u.email && u.email.toLowerCase().includes(query)) ||
+      (u.referralCode && u.referralCode.toLowerCase().includes(query));
 
     const matchesStatus =
       userStatusFilter === 'all'
@@ -505,6 +608,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
     return matchesSearch && matchesStatus;
   });
+
+  // Sorted Users
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (userSortBy === 'highest_balance') return b.balanceUGX - a.balanceUGX;
+    if (userSortBy === 'lowest_balance') return a.balanceUGX - b.balanceUGX;
+    if (userSortBy === 'nodes') return (b.activeMachinesCount || 0) - (a.activeMachinesCount || 0);
+    if (userSortBy === 'name_asc') {
+      const nameA = a.fullName || a.username || '';
+      const nameB = b.fullName || b.username || '';
+      return nameA.localeCompare(nameB);
+    }
+    return 0; // default order from Supabase
+  });
+
+  const totalUserPages = Math.max(1, Math.ceil(sortedUsers.length / userPageSize));
+  const currentUserPage = Math.min(userCurrentPage, totalUserPages);
+  const paginatedUsers = sortedUsers.slice(
+    (currentUserPage - 1) * userPageSize,
+    currentUserPage * userPageSize
+  );
 
   const pendingTasksCount = tasks.filter((t) => t.status === 'pending').length;
 
@@ -571,19 +694,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <div className="bg-slate-800/50 rounded-2xl p-2.5 border border-slate-700/50">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Pending Review</span>
             <span className="text-[16px] font-mono font-black text-amber-400">
-              {pendingTransactions.length + pendingTasksCount}
+              {pendingTxCount + pendingTasksCount}
             </span>
           </div>
           <div className="bg-slate-800/50 rounded-2xl p-2.5 border border-slate-700/50">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Registered Users</span>
             <span className="text-[16px] font-mono font-black text-blue-400">
-              {usersList.length || 2}
+              {usersList.length}
             </span>
           </div>
           <div className="bg-slate-800/50 rounded-2xl p-2.5 border border-slate-700/50">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Catalog Projects</span>
-            <span className="text-[16px] font-mono font-black text-emerald-400">
-              {catalogProjects.length || 4} Active
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Settled Volume</span>
+            <span className="text-[15px] font-mono font-black text-emerald-400 truncate block">
+              UGX {totalSettledAmountUGX.toLocaleString()}
             </span>
           </div>
           <div className="bg-slate-800/50 rounded-2xl p-2.5 border border-slate-700/50">
@@ -606,10 +729,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <ArrowDownLeft className="w-3.5 h-3.5" />
-          <span>Pending Transactions</span>
-          {pendingTransactions.length > 0 && (
-            <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-black">
-              {pendingTransactions.length}
+          <span>Transaction Management</span>
+          {pendingTxCount > 0 ? (
+            <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-black animate-pulse">
+              {pendingTxCount}
+            </span>
+          ) : (
+            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
+              {allTransactions.length}
             </span>
           )}
         </button>
@@ -696,130 +823,418 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       </div>
 
       {/* ==========================================
-          TAB 1: PENDING TRANSACTIONS (DEPOSITS & WITHDRAWALS)
+          TAB 1: TRANSACTION MANAGEMENT PANEL (WITH STATUS FILTERING & SEARCH)
           ========================================== */}
       {activeSubTab === 'transactions' && (
         <div className="space-y-3">
-          {/* Filter & Search Bar */}
-          <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by User, Tx ID, recipient or amount..."
-                value={txSearchQuery}
-                onChange={(e) => setTxSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Ledger Items</span>
+              <span className="text-[16px] font-mono font-black text-slate-900">{allTransactions.length}</span>
+              <span className="text-[10.5px] text-slate-500 block mt-0.5">
+                {depositTxCount} Inflows • {withdrawTxCount} Outflows
+              </span>
             </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setTxFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  txFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                All ({pendingTransactions.length})
-              </button>
-              <button
-                onClick={() => setTxFilter('deposit')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  txFilter === 'deposit' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                }`}
-              >
-                Deposits ({pendingTransactions.filter((t) => t.type === 'deposit').length})
-              </button>
-              <button
-                onClick={() => setTxFilter('withdraw')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  txFilter === 'withdraw' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-                }`}
-              >
-                Withdrawals ({pendingTransactions.filter((t) => t.type === 'withdraw').length})
-              </button>
-              <button
-                onClick={loadPendingTransactions}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Refresh Pending Transactions"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${txLoading ? 'animate-spin' : ''}`} />
-              </button>
+            <div className="bg-white p-3 rounded-2xl border border-amber-200/80 bg-amber-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-amber-700 block">Pending Review</span>
+              <span className="text-[16px] font-mono font-black text-amber-900">{pendingTxCount} requests</span>
+              <span className="text-[10.5px] text-amber-700 block font-mono mt-0.5">
+                UGX {totalPendingAmountUGX.toLocaleString()}
+              </span>
+            </div>
+            <div className="bg-white p-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-emerald-700 block">Approved & Settled</span>
+              <span className="text-[16px] font-mono font-black text-emerald-900">{completedTxCount} settled</span>
+              <span className="text-[10.5px] text-emerald-700 block font-mono mt-0.5">
+                UGX {totalSettledAmountUGX.toLocaleString()}
+              </span>
+            </div>
+            <div className="bg-white p-3 rounded-2xl border border-red-200/80 bg-red-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-red-700 block">Rejected Entries</span>
+              <span className="text-[16px] font-mono font-black text-red-900">{rejectedTxCount} items</span>
+              <span className="text-[10.5px] text-slate-500 block mt-0.5">Audit recorded</span>
             </div>
           </div>
 
-          {/* List of Pending Transactions */}
+          {/* Primary Filter & Search Control Panel */}
+          <div className="bg-white p-3.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+            {/* Search Input and Refresh */}
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by User Name, @Username, User ID, Tx ID, Phone, Amount, Ref..."
+                  value={txSearchQuery}
+                  onChange={(e) => {
+                    setTxSearchQuery(e.target.value);
+                    setTxCurrentPage(1);
+                  }}
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-[12.5px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                {txSearchQuery && (
+                  <button
+                    onClick={() => {
+                      setTxSearchQuery('');
+                      setTxCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-full"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Sort selector */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={txSortBy}
+                    onChange={(e) => setTxSortBy(e.target.value as any)}
+                    className="bg-transparent outline-none cursor-pointer"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="highest_amount">Highest Amount</option>
+                    <option value="lowest_amount">Lowest Amount</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={loadTransactions}
+                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  title="Refresh Transactions Ledger"
+                >
+                  <RefreshCw className={`w-4 h-4 ${txLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Status-Based Filtering Bar */}
+            <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 flex-wrap">
+              {/* Status Tabs */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold uppercase text-slate-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Status:
+                </span>
+
+                <button
+                  onClick={() => {
+                    setTxStatusFilter('all');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    txStatusFilter === 'all'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All Statuses ({allTransactions.length})
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxStatusFilter('pending');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    txStatusFilter === 'pending'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                      : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  {pendingTxCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-900 animate-ping" />}
+                  Pending Review ({pendingTxCount})
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxStatusFilter('completed');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    txStatusFilter === 'completed'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  }`}
+                >
+                  Completed ({completedTxCount})
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxStatusFilter('rejected');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    txStatusFilter === 'rejected'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'bg-red-50 text-red-800 hover:bg-red-100'
+                  }`}
+                >
+                  Rejected ({rejectedTxCount})
+                </button>
+              </div>
+
+              {/* Type Sub-Filter Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold uppercase text-slate-400 mr-1">Type:</span>
+
+                <button
+                  onClick={() => {
+                    setTxTypeFilter('all');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                    txTypeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All Types
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxTypeFilter('deposit');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                    txTypeFilter === 'deposit' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Deposits
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxTypeFilter('withdraw');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                    txTypeFilter === 'withdraw' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Withdrawals
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTxTypeFilter('investment');
+                    setTxCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                    txTypeFilter === 'investment' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Investments
+                </button>
+              </div>
+            </div>
+
+            {/* Active filter summary bar */}
+            {(txSearchQuery || txStatusFilter !== 'all' || txTypeFilter !== 'all') && (
+              <div className="flex items-center justify-between text-[11.5px] bg-blue-50/60 p-2 rounded-xl border border-blue-100 text-blue-900">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                  <span>
+                    Showing <strong>{filteredTransactions.length}</strong> of {allTransactions.length} transactions
+                  </span>
+                  {txStatusFilter !== 'all' && (
+                    <span className="bg-blue-200/70 text-blue-900 px-2 py-0.2 rounded-md font-bold text-[10.5px]">
+                      Status: {txStatusFilter}
+                    </span>
+                  )}
+                  {txTypeFilter !== 'all' && (
+                    <span className="bg-blue-200/70 text-blue-900 px-2 py-0.2 rounded-md font-bold text-[10.5px]">
+                      Type: {txTypeFilter}
+                    </span>
+                  )}
+                  {txSearchQuery && (
+                    <span className="bg-blue-200/70 text-blue-900 px-2 py-0.2 rounded-md font-bold text-[10.5px]">
+                      Query: "{txSearchQuery}"
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setTxSearchQuery('');
+                    setTxStatusFilter('all');
+                    setTxTypeFilter('all');
+                    setTxCurrentPage(1);
+                  }}
+                  className="font-bold text-blue-700 hover:text-blue-950 underline cursor-pointer text-[11px]"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* List of Filtered Transactions */}
           {txLoading ? (
             <div className="bg-white rounded-3xl p-8 text-center text-slate-500 border border-slate-100">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
-              <p className="text-[13px] font-bold">Checking pending transaction ledger...</p>
+              <p className="text-[13px] font-bold">Synchronizing Supabase transactions ledger...</p>
             </div>
-          ) : filteredTransactions.length === 0 ? (
+          ) : paginatedTransactions.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-xs space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-              <h4 className="text-[14px] font-bold text-slate-900">All Transactions Processed</h4>
+              <CheckCircle2 className="w-10 h-10 text-slate-400 mx-auto" />
+              <h4 className="text-[14px] font-bold text-slate-900">No Transactions Found</h4>
               <p className="text-[12px] text-slate-500 max-w-sm mx-auto">
-                There are currently zero pending deposit or withdrawal requests waiting for administrative review.
+                No transactions matched your selected status, type, or search keyword.
               </p>
+              {(txSearchQuery || txStatusFilter !== 'all' || txTypeFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setTxSearchQuery('');
+                    setTxStatusFilter('all');
+                    setTxTypeFilter('all');
+                  }}
+                  className="mt-2 text-[12px] font-bold text-blue-600 hover:underline cursor-pointer"
+                >
+                  Clear all search filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredTransactions.map((tx) => {
+              {paginatedTransactions.map((tx) => {
                 const isDeposit = tx.type === 'deposit';
+                const isWithdraw = tx.type === 'withdraw';
+                const isInvestment = tx.type === 'investment';
+                const isPending = tx.status === 'pending';
+                const isCompleted = tx.status === 'completed' || tx.status === 'approved';
+                const isRejected = tx.status === 'rejected';
                 const isProcessing = actionLoadingId === tx.id;
 
                 return (
                   <div
                     key={tx.id}
-                    className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3 hover:border-slate-300 transition-all"
+                    className={`bg-white rounded-3xl p-4 sm:p-5 border shadow-xs space-y-3 transition-all ${
+                      isPending
+                        ? 'border-amber-300/80 bg-amber-50/10 hover:border-amber-400'
+                        : isRejected
+                        ? 'border-red-200/80 bg-red-50/10'
+                        : 'border-slate-200/80 hover:border-slate-300'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                          className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
                             isDeposit
                               ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-blue-100 text-blue-700'
+                              : isWithdraw
+                              ? 'bg-blue-100 text-blue-700'
+                              : isInvestment
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-slate-100 text-slate-700'
                           }`}
                         >
                           {isDeposit ? (
                             <ArrowDownLeft className="w-5 h-5" />
-                          ) : (
+                          ) : isWithdraw ? (
                             <ArrowUpRight className="w-5 h-5" />
+                          ) : (
+                            <Activity className="w-5 h-5" />
                           )}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Type tag */}
                             <span
                               className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                                 isDeposit
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-blue-100 text-blue-800'
+                                  : isWithdraw
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : isInvestment
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-slate-100 text-slate-800'
                               }`}
                             >
-                              {isDeposit ? 'Deposit Request' : 'Withdrawal Request'}
+                              {isDeposit
+                                ? 'Deposit'
+                                : isWithdraw
+                                ? 'Withdrawal'
+                                : isInvestment
+                                ? 'Investment Node'
+                                : tx.type}
                             </span>
+
+                            {/* Status badge */}
+                            <span
+                              className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                                isPending
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : isCompleted
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  : 'bg-red-100 text-red-900 border border-red-300'
+                              }`}
+                            >
+                              {isPending ? (
+                                <>
+                                  <Clock className="w-3 h-3 text-amber-700" /> Pending Review
+                                </>
+                              ) : isCompleted ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Settled / Completed
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-3 h-3 text-red-700" /> Rejected
+                                </>
+                              )}
+                            </span>
+
                             <span className="text-[11px] font-mono text-slate-400">
-                              {tx.date || 'Just now'}
+                              {tx.date || 'Recent'}
                             </span>
                           </div>
-                          <h4 className="text-[14px] font-extrabold text-slate-900 mt-0.5">
-                            {tx.description || `${isDeposit ? 'Deposit' : 'Withdrawal'} via ${tx.paymentMethod || 'Mobile Money'}`}
+
+                          <h4 className="text-[14px] font-extrabold text-slate-900 mt-1">
+                            {tx.description || `${tx.type} via ${tx.paymentMethod || 'Mobile Money'}`}
                           </h4>
-                          <p className="text-[12px] text-slate-600">
-                            Requested by: <span className="font-bold text-slate-900">{tx.userFullName || 'Investor'}</span>{' '}
-                            <span className="font-mono text-slate-500">(@{tx.username || 'user'})</span>
-                          </p>
+
+                          <div className="flex items-center gap-2 text-[12px] text-slate-600 mt-0.5 flex-wrap">
+                            <span>
+                              User:{' '}
+                              <strong className="text-slate-900">{tx.userFullName || 'Investor'}</strong>{' '}
+                              <span className="font-mono text-slate-500">(@{tx.username || 'user'})</span>
+                            </span>
+
+                            {tx.userId && (
+                              <button
+                                onClick={() => handleCopyText(tx.userId!, `tx-user-${tx.id}`, 'User ID')}
+                                className="inline-flex items-center gap-1 font-mono text-[10.5px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded-md transition-colors cursor-pointer"
+                                title="Copy User ID"
+                              >
+                                {copiedId === `tx-user-${tx.id}` ? (
+                                  <CheckCheck className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                )}
+                                <span>UID: {tx.userId.slice(0, 8)}...</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="text-[10px] font-bold uppercase text-slate-400 block">
                           Amount (UGX)
                         </span>
                         <span
                           className={`text-[16px] sm:text-[18px] font-mono font-black ${
-                            isDeposit ? 'text-emerald-600' : 'text-slate-900'
+                            isDeposit
+                              ? 'text-emerald-600'
+                              : isWithdraw
+                              ? 'text-blue-600'
+                              : 'text-slate-900'
                           }`}
                         >
                           UGX {tx.amountUGX.toLocaleString()}
@@ -831,109 +1246,272 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 text-[12px] grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Payment Channel</span>
-                        <span className="font-bold text-slate-800">{tx.paymentMethod || 'MTN / Airtel'}</span>
+                        <span className="font-bold text-slate-800">{tx.paymentMethod || 'MTN / Airtel Money'}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Reference / Recipient</span>
                         <span className="font-mono font-bold text-slate-800 truncate block">
-                          {tx.recipientInfo || 'Sunrise Treasury'}
+                          {tx.recipientInfo || 'Sunrise Financial Core'}
                         </span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Transaction ID</span>
-                        <span className="font-mono text-[11px] text-slate-600 truncate block">{tx.id}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-[11px] text-slate-600 truncate block">{tx.id}</span>
+                          <button
+                            onClick={() => handleCopyText(tx.id, `tx-id-${tx.id}`, 'Tx ID')}
+                            className="text-slate-400 hover:text-slate-700 p-0.5"
+                            title="Copy Transaction ID"
+                          >
+                            {copiedId === `tx-id-${tx.id}` ? (
+                              <CheckCheck className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Action Controls */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                      <button
-                        onClick={() => handleApproveTransaction(tx)}
-                        disabled={isProcessing}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-[12.5px] py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                      >
-                        {isProcessing ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Check className="w-4 h-4" />
-                        )}
-                        {isDeposit ? 'Approve & Credit Balance' : 'Approve & Settle Payout'}
-                      </button>
+                    {/* Action Controls for Pending Transactions */}
+                    {isPending && (
+                      <div className="flex items-center gap-2 pt-1 border-t border-amber-200/60">
+                        <button
+                          onClick={() => handleApproveTransaction(tx)}
+                          disabled={isProcessing}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-[12.5px] py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                        >
+                          {isProcessing ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4" />
+                          )}
+                          {isDeposit ? 'Approve & Credit Balance' : 'Approve & Settle Payout'}
+                        </button>
 
-                      <button
-                        onClick={() => handleRejectTransaction(tx)}
-                        disabled={isProcessing}
-                        className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-bold text-[12.5px] py-2.5 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => handleRejectTransaction(tx)}
+                          disabled={isProcessing}
+                          className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-bold text-[12.5px] py-2.5 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Reject Request
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
+
+              {/* Transactions Pagination Controls */}
+              {totalTxPages > 1 && (
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between text-[12px] flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span>
+                      Showing {(currentTxPage - 1) * txPageSize + 1} to{' '}
+                      {Math.min(currentTxPage * txPageSize, sortedTransactions.length)} of{' '}
+                      {sortedTransactions.length}
+                    </span>
+                    <select
+                      value={txPageSize}
+                      onChange={(e) => {
+                        setTxPageSize(Number(e.target.value));
+                        setTxCurrentPage(1);
+                      }}
+                      className="bg-slate-100 px-2 py-1 rounded-lg font-bold border border-slate-200"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={15}>15 per page</option>
+                      <option value={30}>30 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setTxCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentTxPage === 1}
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="px-3 py-1 font-bold text-slate-800">
+                      Page {currentTxPage} of {totalTxPages}
+                    </span>
+                    <button
+                      onClick={() => setTxCurrentPage((p) => Math.min(totalTxPages, p + 1))}
+                      disabled={currentTxPage === totalTxPages}
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
       {/* ==========================================
-          TAB 2: USER MANAGEMENT
+          TAB 2: USER MANAGEMENT (SEARCH BY NAME OR ID & STATUS FILTERING)
           ========================================== */}
       {activeSubTab === 'users' && (
         <div className="space-y-3">
+          {/* User Vault Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Registered Users</span>
+              <span className="text-[16px] font-mono font-black text-slate-900">{usersList.length}</span>
+              <span className="text-[10.5px] text-slate-500 block mt-0.5">{adminUsersCount} Administrators</span>
+            </div>
+            <div className="bg-white p-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-emerald-700 block">Active Accounts</span>
+              <span className="text-[16px] font-mono font-black text-emerald-900">{activeUsersCount}</span>
+              <span className="text-[10.5px] text-emerald-700 block mt-0.5">Good standing</span>
+            </div>
+            <div className="bg-white p-3 rounded-2xl border border-red-200/80 bg-red-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-red-700 block">Suspended / Blocked</span>
+              <span className="text-[16px] font-mono font-black text-red-900">{blockedUsersCount}</span>
+              <span className="text-[10.5px] text-red-700 block mt-0.5">Access revoked</span>
+            </div>
+            <div className="bg-white p-3 rounded-2xl border border-blue-200/80 bg-blue-50/20 shadow-xs">
+              <span className="text-[10px] uppercase font-bold text-blue-700 block">System Vault Balance</span>
+              <span className="text-[15px] font-mono font-black text-blue-900 truncate block">
+                UGX {totalSystemVaultUGX.toLocaleString()}
+              </span>
+              <span className="text-[10.5px] text-blue-700 block mt-0.5">Custodial holdings</span>
+            </div>
+          </div>
+
           {/* User Search & Filter Header */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search registered users by username, full name, phone..."
-                value={userSearchQuery}
-                onChange={(e) => setUserSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
+          <div className="bg-white p-3.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+            {/* Search Input supporting Name or User ID */}
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter users by Full Name, @Username, or User ID (UUID)..."
+                  value={userSearchQuery}
+                  onChange={(e) => {
+                    setUserSearchQuery(e.target.value);
+                    setUserCurrentPage(1);
+                  }}
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-[12.5px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                {userSearchQuery && (
+                  <button
+                    onClick={() => {
+                      setUserSearchQuery('');
+                      setUserCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-full"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* User Sort selector */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-2xl border border-slate-200 text-[11.5px] font-bold text-slate-700">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={userSortBy}
+                    onChange={(e) => setUserSortBy(e.target.value as any)}
+                    className="bg-transparent outline-none cursor-pointer"
+                  >
+                    <option value="highest_balance">Highest Balance</option>
+                    <option value="lowest_balance">Lowest Balance</option>
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="nodes">Most Nodes</option>
+                    <option value="newest">Default Order</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={loadUsersList}
+                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  title="Refresh Users List"
+                >
+                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setUserStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  userStatusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                All ({usersList.length})
-              </button>
-              <button
-                onClick={() => setUserStatusFilter('active')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  userStatusFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                }`}
-              >
-                Active ({usersList.filter((u) => u.status === 'active').length})
-              </button>
-              <button
-                onClick={() => setUserStatusFilter('blocked')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  userStatusFilter === 'blocked' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-800 hover:bg-red-100'
-                }`}
-              >
-                Blocked ({usersList.filter((u) => u.status === 'blocked').length})
-              </button>
-              <button
-                onClick={() => setUserStatusFilter('admin')}
-                className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
-                  userStatusFilter === 'admin' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-                }`}
-              >
-                Admins ({usersList.filter((u) => u.isAdmin || u.role === 'admin').length})
-              </button>
-              <button
-                onClick={loadUsersList}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Refresh Users List"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${usersLoading ? 'animate-spin' : ''}`} />
-              </button>
+            {/* Status Filter Tabs & Summary */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2.5 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold uppercase text-slate-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Status:
+                </span>
+
+                <button
+                  onClick={() => {
+                    setUserStatusFilter('all');
+                    setUserCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    userStatusFilter === 'all' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All Users ({usersList.length})
+                </button>
+                <button
+                  onClick={() => {
+                    setUserStatusFilter('active');
+                    setUserCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    userStatusFilter === 'active' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  }`}
+                >
+                  Active ({activeUsersCount})
+                </button>
+                <button
+                  onClick={() => {
+                    setUserStatusFilter('blocked');
+                    setUserCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    userStatusFilter === 'blocked' ? 'bg-red-600 text-white shadow-xs' : 'bg-red-50 text-red-800 hover:bg-red-100'
+                  }`}
+                >
+                  Blocked ({blockedUsersCount})
+                </button>
+                <button
+                  onClick={() => {
+                    setUserStatusFilter('admin');
+                    setUserCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer ${
+                    userStatusFilter === 'admin' ? 'bg-blue-600 text-white shadow-xs' : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                  }`}
+                >
+                  Admins ({adminUsersCount})
+                </button>
+              </div>
+
+              {/* Active search filter reset */}
+              {(userSearchQuery || userStatusFilter !== 'all') && (
+                <div className="flex items-center gap-2 text-[11.5px] text-slate-600">
+                  <span>
+                    Found <strong>{filteredUsers.length}</strong> matching
+                  </span>
+                  <button
+                    onClick={() => {
+                      setUserSearchQuery('');
+                      setUserStatusFilter('all');
+                      setUserCurrentPage(1);
+                    }}
+                    className="font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -943,14 +1521,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
               <p className="text-[13px] font-bold">Loading users from Supabase ledger...</p>
             </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-xs">
-              <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-[13px] font-bold text-slate-700">No matching users found.</p>
+          ) : paginatedUsers.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-xs space-y-2">
+              <Users className="w-10 h-10 text-slate-300 mx-auto" />
+              <h4 className="text-[14px] font-bold text-slate-800">No matching users found</h4>
+              <p className="text-[12px] text-slate-500 max-w-sm mx-auto">
+                No registered accounts match your name, user ID, or status filter.
+              </p>
+              {(userSearchQuery || userStatusFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setUserSearchQuery('');
+                    setUserStatusFilter('all');
+                  }}
+                  className="mt-2 text-[12px] font-bold text-blue-600 hover:underline cursor-pointer"
+                >
+                  Clear user search
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredUsers.map((u) => {
+              {paginatedUsers.map((u) => {
                 const isBlocked = u.status === 'blocked';
                 const isAdmin = u.isAdmin || u.role === 'admin';
 
@@ -1001,6 +1593,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </div>
 
                           <div className="flex items-center gap-3 text-[11.5px] text-slate-500 mt-1 flex-wrap">
+                            {/* Copyable User ID Badge */}
+                            <button
+                              onClick={() => handleCopyText(u.id, `user-card-id-${u.id}`, 'User ID')}
+                              className="inline-flex items-center gap-1 font-mono text-[10.5px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                              title="Click to copy full User ID"
+                            >
+                              {copiedId === `user-card-id-${u.id}` ? (
+                                <CheckCheck className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-slate-400" />
+                              )}
+                              <span>ID: {u.id}</span>
+                            </button>
+
                             {(u as any).email && (
                               <span className="flex items-center gap-1 font-medium text-slate-600">
                                 <Mail className="w-3 h-3 text-slate-400" /> {(u as any).email}
@@ -1013,9 +1619,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             )}
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-slate-400" /> Member: {u.memberSince || 'August 2026'}
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400 truncate max-w-[140px]">
-                              ID: {u.id}
                             </span>
                           </div>
                         </div>
@@ -1085,6 +1688,52 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
                 );
               })}
+
+              {/* Users Pagination Controls */}
+              {totalUserPages > 1 && (
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between text-[12px] flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span>
+                      Showing {(currentUserPage - 1) * userPageSize + 1} to{' '}
+                      {Math.min(currentUserPage * userPageSize, sortedUsers.length)} of {sortedUsers.length} users
+                    </span>
+                    <select
+                      value={userPageSize}
+                      onChange={(e) => {
+                        setUserPageSize(Number(e.target.value));
+                        setUserCurrentPage(1);
+                      }}
+                      className="bg-slate-100 px-2 py-1 rounded-lg font-bold border border-slate-200"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={15}>15 per page</option>
+                      <option value={30}>30 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setUserCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentUserPage === 1}
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="px-3 py-1 font-bold text-slate-800">
+                      Page {currentUserPage} of {totalUserPages}
+                    </span>
+                    <button
+                      onClick={() => setUserCurrentPage((p) => Math.min(totalUserPages, p + 1))}
+                      disabled={currentUserPage === totalUserPages}
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

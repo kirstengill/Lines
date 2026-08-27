@@ -601,6 +601,10 @@ class AuthService {
     return supabaseAdmin.fetchPendingTransactions();
   }
 
+  public async fetchAllTransactions() {
+    return supabaseAdmin.fetchAllTransactions();
+  }
+
   public async approveTransaction(txId: string) {
     return supabaseAdmin.approveTransaction(txId);
   }
