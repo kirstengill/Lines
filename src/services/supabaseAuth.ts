@@ -7,6 +7,7 @@
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import {
   UserProfile,
+  ReferralPartner,
   WalletState,
   Transaction,
   Machine,
@@ -55,7 +56,7 @@ class AuthService {
           if (session?.access_token) {
             this.accessToken = session.access_token;
             if (this.currentUser) {
-              
+
             }
           }
         });
@@ -91,9 +92,9 @@ class AuthService {
     this.currentUser = user;
     if (user) {
       // REST data endpoints receive the real Supabase Auth session token
-      
+
     } else {
-      
+
     }
   }
 
@@ -339,7 +340,7 @@ class AuthService {
         // Ignore signout error
       }
     }
-    
+
     this.currentUser = null;
     this.accessToken = null;
     this.memoryUserData = {};
@@ -368,6 +369,8 @@ class AuthService {
       const isAdmin = data.is_admin === true;
       const status = typeof data.status === 'string' ? data.status : 'active';
 
+      const referrals = await this.fetchReferrals(data.referral_code || '');
+
       return {
         id: data.id,
         username: data.username,
@@ -383,7 +386,7 @@ class AuthService {
         referredBy: data.referred_by,
         referralCount: data.referral_count || 0,
         referralEarningsUGX: data.referral_earnings_ugx || 0,
-        referrals: [],
+        referrals,
         welcomeBonusClaimed: data.welcome_bonus_claimed !== false,
         createdAt: data.created_at,
         isAdmin,
@@ -420,6 +423,7 @@ class AuthService {
         if (profileRes.data) {
           // Authoritative admin flag: public.profiles.is_admin
           const isAdmin = profileRes.data.is_admin === true;
+          const referrals = await this.fetchReferrals(profileRes.data.referral_code || '');
           this.currentUser = {
             id: profileRes.data.id,
             username: profileRes.data.username,
@@ -435,7 +439,7 @@ class AuthService {
             referredBy: profileRes.data.referred_by,
             referralCount: profileRes.data.referral_count || 0,
             referralEarningsUGX: profileRes.data.referral_earnings_ugx || 0,
-            referrals: [],
+            referrals,
             welcomeBonusClaimed: profileRes.data.welcome_bonus_claimed !== false,
             createdAt: profileRes.data.created_at,
             isAdmin,
@@ -447,7 +451,7 @@ class AuthService {
           const { data: { session } } = await this.client.auth.getSession();
           if (session?.access_token && this.currentUser) {
             this.accessToken = session.access_token;
-            
+
           }
         } catch {
           // ignore
@@ -581,6 +585,35 @@ class AuthService {
   // ==========================================================
   // REFERRAL PROCESSING (called once after signup)
   // ==========================================================
+
+  /**
+   * Load the referred-users list from Supabase: profiles whose referred_by
+   * matches this user's referral code. Per-user commission is included only
+   * when the backend records it; the 15% calculation always stays server-side.
+   */
+  private async fetchReferrals(referralCode: string): Promise<ReferralPartner[]> {
+    if (!this.client || !referralCode) return [];
+    try {
+      const { data, error } = await this.client
+        .from('profiles')
+        .select('id, username, full_name, created_at, status')
+        .eq('referred_by', referralCode)
+        .order('created_at', { ascending: false });
+      if (error || !data) return [];
+      return data.map((r: any) => ({
+        id: r.id,
+        username: r.username || 'user',
+        fullName: r.full_name || undefined,
+        registeredDate: r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+          : '',
+        status: (r.status === 'active' ? 'active' : 'pending') as 'active' | 'pending',
+        rewardUGX: typeof r.reward_ugx === 'number' ? r.reward_ugx : undefined,
+      }));
+    } catch {
+      return [];
+    }
+  }
 
   public async processReferral(referralCode: string): Promise<{ applied: boolean; reason?: string; error?: string }> {
     const sb = this.client;

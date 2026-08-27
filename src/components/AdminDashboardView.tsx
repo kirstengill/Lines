@@ -1351,7 +1351,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Reference / Recipient</span>
                         <span className="font-mono font-bold text-slate-800 truncate block">
-                          {tx.recipientInfo || 'Sunrise Financial Core'}
+                          {tx.recipientInfo || 'SolNova Financial Core'}
                         </span>
                       </div>
                       <div>

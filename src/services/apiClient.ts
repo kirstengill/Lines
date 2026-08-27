@@ -1,5 +1,5 @@
 /**
- * Standard REST API Client for Sunrise Capital DS Platform
+ * Standard REST API Client for SolNova Capital — Solar Mining & Investment
  * Integrates with Supabase Cloud & Server Backend as Single Source of Truth
  * NO localStorage or sessionStorage is used. Sessions are maintained in-memory & cloud.
  */

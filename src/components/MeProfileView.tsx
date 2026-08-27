@@ -86,13 +86,13 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                 Referral Program
               </h4>
               <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-200 text-blue-900 px-1.5 py-0.2 rounded-full">
-                Code: {user?.referralCode || 'SC-SUNRISE'}
+                Code: {user?.referralCode || 'SC-SOLNOVA'}
               </span>
             </div>
             <p className="text-[11px] text-slate-600 mt-0.5">
               {user?.referralCount
-                ? `${user.referralCount} partners linked • UGX ${(user.referralEarningsUGX || 0).toLocaleString()} earned`
-                : 'Invite partners and earn continuous UGX yield bonuses'}
+                ? `${user.referralCount} referrals • UGX ${(user.referralEarningsUGX || 0).toLocaleString()} earned`
+                : 'Invite friends and earn 15% of every approved deposit they make'}
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
 
       {/* Footer Info */}
       <div className="text-center pt-2 text-[11px] text-slate-400">
-        Sunrise Capital DS Platform • Sovereign Asset Portfolios
+        SolNova Capital • Solar Mining & Investment
       </div>
     </div>
   );

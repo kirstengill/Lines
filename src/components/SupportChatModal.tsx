@@ -11,7 +11,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     {
       id: 'm1',
       sender: 'support',
-      text: 'Hello! Welcome to Sunrise Capital DS Platform Concierge. How can I assist you with your mining rigs, UGX reward payouts, or wallet today?',
+      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with your mining plans, UGX reward payouts, or wallet today?',
       timestamp: 'Just now',
     },
   ]);
@@ -78,7 +78,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
             </div>
             <div>
               <h3 className="text-[15px] font-bold leading-tight">
-                Sunrise DS Support Desk
+                SolNova Support Desk
               </h3>
               <p className="text-[11px] text-blue-100 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>

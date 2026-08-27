@@ -12,7 +12,6 @@ import {
   HelpCircle,
   KeyRound,
   Gift,
-  SunMedium,
   Users,
   Check
 } from 'lucide-react';
@@ -170,20 +169,31 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       {/* Brand Header Banner */}
       <div className="px-6 pt-6 pb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1657D9] to-[#3B82F6] flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-            <SunMedium className="w-5 h-5 text-amber-300 animate-pulse" />
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#312E81] via-[#1E40AF] to-[#2563EB] flex items-center justify-center shadow-md shadow-indigo-500/30">
+            {/* SolNova brand mark: golden sun with energy bolt */}
+            <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true">
+              <defs>
+                <linearGradient id="snSun" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#FDE68A" />
+                  <stop offset="1" stopColor="#F59E0B" />
+                </linearGradient>
+              </defs>
+              <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FBBF24" strokeOpacity="0.4" strokeWidth="1" />
+              <circle cx="12" cy="12" r="4.8" fill="url(#snSun)" />
+              <path d="M12.9 7.5 l-3.1 5.1 h2.2 l-0.9 3.7 l3.1 -5.1 h-2.2 z" fill="#FFFBEB" />
+            </svg>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="text-[17px] font-black text-slate-900 tracking-tight leading-none">
-                SUNRISE CAPITAL
+                SOLNOVA CAPITAL
               </h1>
               <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-sm">
                 DS
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              Mining & Clean Energy Platform (UGX)
+              Solar Mining & Investment (UGX)
             </p>
           </div>
         </div>

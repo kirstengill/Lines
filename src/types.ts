@@ -72,7 +72,8 @@ export interface ReferralPartner {
   fullName?: string;
   registeredDate: string;
   status: 'active' | 'pending';
-  rewardUGX: number;
+  /** Commission earned from this referred user's approved deposits (when available). */
+  rewardUGX?: number;
 }
 
 export interface UserProfile {

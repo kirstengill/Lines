@@ -100,7 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) 
                 Account Access
               </h3>
               <p className="text-[11px] text-slate-500">
-                Sunrise Capital - DS Platform
+                SolNova Capital · Solar Mining & Investment
               </p>
             </div>
           </div>

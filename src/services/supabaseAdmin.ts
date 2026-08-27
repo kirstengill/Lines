@@ -276,6 +276,68 @@ export const supabaseAdmin = {
         isBoosted: Boolean(m.is_boosted || m.isBoosted),
       }));
 
+      // One-time migrations: the old seeded catalog had an unrealistic jump from
+      // UGX 15,000 straight to millions, and rewards that didn't match the new
+      // business schedule. If a core plan still carries a stale signature, sync
+      // it to the corrected values. Admin-created custom plans are untouched.
+      const CANONICAL: Record<string, { min: number; daily: number; roi: number }> = {
+        mach_starter_15k: { min: 15000, daily: 3500, roi: 8517 },
+        mach_solar_mech_10: { min: 20000, daily: 4300, roi: 7848 },
+        mach_ds_mining_shoe: { min: 30000, daily: 6750, roi: 8213 },
+        mach_hydro_turbine_x500: { min: 50000, daily: 11500, roi: 8395 },
+        mach_quantum_vip_9000: { min: 100000, daily: 24000, roi: 8760 },
+      };
+      const STALE_MIN_INVEST = new Set([5000000, 25000000, 10000000, 100000000]);
+      const corrections = mappedMachines
+        .filter((m) => {
+          const canon = CANONICAL[m.id];
+          if (!canon) return false;
+          if (m.minInvestUGX !== canon.min && STALE_MIN_INVEST.has(m.minInvestUGX)) return true;
+          // Starter plan: old 1,250 reward or any wrong reward at the correct minimum
+          if (m.id === 'mach_starter_15k' && m.minInvestUGX === canon.min && m.dailyRewardUGX !== canon.daily) return true;
+          // Plans corrected in the first migration round but with outdated rewards
+          if (m.minInvestUGX === canon.min && m.dailyRewardUGX !== canon.daily && [850, 1440, 3590, 4500].includes(m.dailyRewardUGX)) return true;
+          return false;
+        })
+        .map((m) => {
+          const canon = CANONICAL[m.id];
+          const base = AVAILABLE_CATALOG.find((c) => c.id === m.id)!;
+          return {
+            id: m.id,
+            title: base.title,
+            subtitle: base.subtitle || null,
+            category: base.category,
+            image: base.image,
+            daily_reward_ugx: canon.daily,
+            status: base.status || 'Active',
+            est_yearly_roi: canon.roi,
+            min_invest_ugx: canon.min,
+            hashrate: base.hashrate || '10.0 TH/s',
+            power_source: base.powerSource || 'Clean Energy',
+            uptime: base.uptime || '99.9%',
+            temperature: base.temperature || '36.0°C',
+            efficiency: base.efficiency || 98.5,
+            total_mined_ugx: 0,
+            unclaimed_rewards_ugx: 0,
+            is_boosted: Boolean(base.isBoosted),
+          };
+        });
+      if (corrections.length > 0) {
+        try {
+          await sb.from('catalog_machines').upsert(corrections, { onConflict: 'id' });
+          corrections.forEach((c) => {
+            const m = mappedMachines.find((x) => x.id === c.id);
+            if (m) {
+              m.minInvestUGX = c.min_invest_ugx;
+              m.dailyRewardUGX = c.daily_reward_ugx;
+              m.estYearlyROI = c.est_yearly_roi;
+            }
+          });
+        } catch (fixErr) {
+          console.warn('[Supabase Admin] Catalog amount migration notice:', fixErr);
+        }
+      }
+
       return { machines: mappedMachines };
     } catch (e: any) {
       console.error('[Supabase Admin] fetchCatalogMachines error:', e);

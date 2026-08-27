@@ -22,28 +22,28 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     <header className="px-5 pt-3 pb-2 flex items-center justify-between bg-transparent">
       {/* Brand & Logo */}
       <div className="flex items-center gap-2.5">
-        {/* Custom Sunrise Chart Logo */}
-        <div className="relative flex items-center justify-center w-9 h-9">
-          {/* Sun Rays Arch */}
-          <div className="absolute -top-1 w-7 h-3.5 border-t-2 border-r-2 border-l-2 border-amber-400 rounded-t-full flex items-center justify-center">
-            <span className="w-1 h-1 bg-amber-400 rounded-full"></span>
-          </div>
-          {/* Sun Body */}
-          <div className="w-5 h-5 bg-gradient-to-tr from-amber-400 to-amber-300 rounded-full shadow-xs mb-1"></div>
-          {/* Rising Blue Bar Graph Overlay */}
-          <div className="absolute bottom-0 flex items-end gap-0.5 z-10">
-            <div className="w-1.5 h-3 bg-blue-700 rounded-t-xs"></div>
-            <div className="w-1.5 h-4.5 bg-blue-600 rounded-t-xs"></div>
-            <div className="w-1.5 h-6 bg-blue-500 rounded-t-xs"></div>
-            {/* Arrow line */}
-            <div className="w-1.5 h-7.5 bg-sky-400 rounded-t-xs"></div>
-          </div>
+        {/* SolNova brand mark: golden sun with energy bolt */}
+        <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#312E81] via-[#1E40AF] to-[#2563EB] shadow-md shadow-indigo-500/25">
+          <svg viewBox="0 0 24 24" className="w-5.5 h-5.5" aria-hidden="true">
+            <defs>
+              <linearGradient id="snSunHdr" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#FDE68A" />
+                <stop offset="1" stopColor="#F59E0B" />
+              </linearGradient>
+            </defs>
+            <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FBBF24" strokeOpacity="0.4" strokeWidth="1" />
+            <circle cx="12" cy="12" r="4.8" fill="url(#snSunHdr)" />
+            <path d="M12.9 7.5 l-3.1 5.1 h2.2 l-0.9 3.7 l3.1 -5.1 h-2.2 z" fill="#FFFBEB" />
+          </svg>
         </div>
 
         <div className="flex flex-col">
           <h1 className="text-[17px] font-extrabold tracking-tight text-[#0F172A] leading-tight">
-            Sunrise Capital - DS Platform
+            SolNova Capital
           </h1>
+          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 leading-none mt-0.5">
+            Solar Mining & Investment
+          </span>
         </div>
       </div>
 
