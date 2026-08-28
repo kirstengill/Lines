@@ -24,6 +24,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
   const numUGX = parseFloat(amountUGXStr) || 0;
 
+  // Deposit receiving line (Airtel). Users send money directly via their own network's USSD.
+  const DEPOSIT_PHONE = '0706403754';
+  const depositUssd =
+    activeTab === 'airtel'
+      ? `*185*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`
+      : `*165*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`;
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -51,13 +58,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
         activeTab === 'mtn'
           ? 'MTN Mobile Money'
           : activeTab === 'airtel'
-          ? 'Airtel Money Uganda'
-          : 'Stanbic Bank EFT';
+            ? 'Airtel Money Uganda'
+            : 'Stanbic Bank EFT';
       const desc =
         mode === 'deposit'
           ? `${channelName} Deposit Request`
           : `Payout Request to ${recipient}`;
-      
+
       onSuccess(numUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : undefined);
       onClose();
     }, 600);
@@ -71,9 +78,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
         <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-10">
           <div className="flex items-center gap-2">
             <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                mode === 'deposit' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
-              }`}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center ${mode === 'deposit' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                }`}
             >
               {mode === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
             </div>
@@ -108,11 +114,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   setActiveTab('mtn');
                   if (mode === 'withdraw') setRecipient('0772 123 456 (MTN MoMo)');
                 }}
-                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'mtn'
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'mtn'
                     ? 'border-[#1657D9] bg-yellow-50 text-[#0F172A] font-bold shadow-xs'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <Smartphone className="w-4 h-4 mx-auto mb-1 text-amber-500" />
                 <span className="text-[11px] block font-bold">MTN MoMo</span>
@@ -124,11 +129,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   setActiveTab('airtel');
                   if (mode === 'withdraw') setRecipient('0750 987 654 (Airtel Money)');
                 }}
-                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'airtel'
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'airtel'
                     ? 'border-[#1657D9] bg-red-50 text-[#0F172A] font-bold shadow-xs'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <Smartphone className="w-4 h-4 mx-auto mb-1 text-red-500" />
                 <span className="text-[11px] block font-bold">Airtel Money</span>
@@ -140,11 +144,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   setActiveTab('bank');
                   if (mode === 'withdraw') setRecipient('Stanbic Bank - 9030018829104');
                 }}
-                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'bank'
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'bank'
                     ? 'border-[#1657D9] bg-blue-50/70 text-[#1657D9] font-bold shadow-xs'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <CreditCard className="w-4 h-4 mx-auto mb-1 text-blue-600" />
                 <span className="text-[11px] block font-bold">Bank Transfer</span>
@@ -192,14 +195,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               {activeTab === 'mtn' && (
                 <div>
                   <span className="text-[11px] font-bold text-slate-700 block uppercase">
-                    MTN UGANDA DIRECT MERCHANT PAY CODE
+                    MTN MOMO — SEND MONEY USSD CODE
                   </span>
                   <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 mt-1">
                     <span className="font-mono font-bold text-slate-900 text-[14px]">
-                      *165*3*991204#
+                      {depositUssd}
                     </span>
                     <button
-                      onClick={() => handleCopy('*165*3*991204#')}
+                      onClick={() => handleCopy(depositUssd)}
                       className="text-xs font-semibold text-blue-600 flex items-center gap-1 hover:text-blue-800"
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -207,7 +210,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Merchant Name: <span className="font-semibold text-slate-700">SUNRISE CAPITAL DS LTD</span>. Instant automated account credit in UGX.
+                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (Sunrise Capital DS). Your chosen amount is already included in the code.
                   </p>
                 </div>
               )}
@@ -215,14 +218,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               {activeTab === 'airtel' && (
                 <div>
                   <span className="text-[11px] font-bold text-slate-700 block uppercase">
-                    AIRTEL MONEY UGANDA MERCHANT CODE
+                    AIRTEL MONEY — SEND MONEY USSD CODE
                   </span>
                   <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 mt-1">
                     <span className="font-mono font-bold text-slate-900 text-[14px]">
-                      *185*9*991204#
+                      {depositUssd}
                     </span>
                     <button
-                      onClick={() => handleCopy('*185*9*991204#')}
+                      onClick={() => handleCopy(depositUssd)}
                       className="text-xs font-semibold text-blue-600 flex items-center gap-1 hover:text-blue-800"
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -230,7 +233,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Merchant Code: <span className="font-semibold text-slate-700">991204</span> (Sunrise Capital DS). Instant UGX credit.
+                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (Sunrise Capital DS — Airtel line). Your chosen amount is already included in the code.
                   </p>
                 </div>
               )}
@@ -287,15 +290,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           <button
             onClick={handleAction}
             disabled={isProcessing}
-            className={`w-full py-3 rounded-xl font-bold text-[14px] text-white shadow-md active:scale-98 transition-all cursor-pointer ${
-              mode === 'deposit' ? 'bg-[#1657D9] hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'
-            }`}
+            className={`w-full py-3 rounded-xl font-bold text-[14px] text-white shadow-md active:scale-98 transition-all cursor-pointer ${mode === 'deposit' ? 'bg-[#1657D9] hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
           >
             {isProcessing
               ? 'Processing Transaction...'
               : mode === 'deposit'
-              ? `Confirm Deposit of UGX ${numUGX.toLocaleString()}`
-              : `Submit Withdrawal of UGX ${numUGX.toLocaleString()}`}
+                ? `Confirm Deposit of UGX ${numUGX.toLocaleString()}`
+                : `Submit Withdrawal of UGX ${numUGX.toLocaleString()}`}
           </button>
         </div>
       </div>
