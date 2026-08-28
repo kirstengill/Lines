@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { X, ArrowDownLeft, ArrowUpRight, Copy, Check, Smartphone, CreditCard, ShieldAlert } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+// Withdrawal rules
+const MIN_WITHDRAWAL_UGX = 4000;
+const WITHDRAWAL_FEE_RATE = 0.15; // 15% transaction fee
+
 interface DepositWithdrawModalProps {
   mode: 'deposit' | 'withdraw';
   onClose: () => void;
@@ -24,6 +28,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
   const numUGX = parseFloat(amountUGXStr) || 0;
 
+  // Withdrawal fee breakdown: 15% is deducted from the requested amount.
+  const withdrawalFeeUGX = mode === 'withdraw' ? Math.round(numUGX * WITHDRAWAL_FEE_RATE) : 0;
+  const netWithdrawalUGX = mode === 'withdraw' ? numUGX - withdrawalFeeUGX : numUGX;
+
   // Deposit receiving line (Airtel). Users send money directly via their own network's USSD.
   const DEPOSIT_PHONE = '0706403754';
   const depositUssd =
@@ -44,7 +52,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       return;
     }
 
-    // REQUIREMENT 6: Insufficient Withdrawal Balance validation
+    // REQUIREMENT 6: Minimum withdrawal amount
+    if (mode === 'withdraw' && numUGX < MIN_WITHDRAWAL_UGX) {
+      setErrorMessage(`Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`);
+      return;
+    }
+
+    // REQUIREMENT 6: Insufficient Withdrawal Balance validation (total incl. 15% fee)
     if (mode === 'withdraw' && numUGX > balanceUGX) {
       setErrorMessage(`Insufficient Balance: Requested withdrawal amount of UGX ${numUGX.toLocaleString()} exceeds your available balance of UGX ${balanceUGX.toLocaleString()}.`);
       return;
@@ -65,7 +79,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           ? `${channelName} Deposit Request`
           : `Payout Request to ${recipient}`;
 
-      onSuccess(numUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : undefined);
+      onSuccess(netWithdrawalUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : undefined);
       onClose();
     }, 600);
   };
@@ -115,8 +129,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   if (mode === 'withdraw') setRecipient('0772 123 456 (MTN MoMo)');
                 }}
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'mtn'
-                    ? 'border-[#1657D9] bg-yellow-50 text-[#0F172A] font-bold shadow-xs'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'border-[#1657D9] bg-yellow-50 text-[#0F172A] font-bold shadow-xs'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
               >
                 <Smartphone className="w-4 h-4 mx-auto mb-1 text-amber-500" />
@@ -130,8 +144,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   if (mode === 'withdraw') setRecipient('0750 987 654 (Airtel Money)');
                 }}
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'airtel'
-                    ? 'border-[#1657D9] bg-red-50 text-[#0F172A] font-bold shadow-xs'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'border-[#1657D9] bg-red-50 text-[#0F172A] font-bold shadow-xs'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
               >
                 <Smartphone className="w-4 h-4 mx-auto mb-1 text-red-500" />
@@ -145,8 +159,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   if (mode === 'withdraw') setRecipient('Stanbic Bank - 9030018829104');
                 }}
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'bank'
-                    ? 'border-[#1657D9] bg-blue-50/70 text-[#1657D9] font-bold shadow-xs'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'border-[#1657D9] bg-blue-50/70 text-[#1657D9] font-bold shadow-xs'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
               >
                 <CreditCard className="w-4 h-4 mx-auto mb-1 text-blue-600" />
@@ -173,6 +187,24 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 font-mono"
               />
             </div>
+
+            {/* Withdrawal fee breakdown */}
+            {mode === 'withdraw' && numUGX > 0 && (
+              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1">
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="text-slate-600 font-medium">Withdrawal Amount</span>
+                  <span className="font-mono font-bold text-slate-800">UGX {numUGX.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="text-slate-600 font-medium">Transaction Fee (15%)</span>
+                  <span className="font-mono font-bold text-red-600">- UGX {withdrawalFeeUGX.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12px] border-t border-slate-200 pt-1">
+                  <span className="text-slate-700 font-bold">You Receive</span>
+                  <span className="font-mono font-bold text-emerald-600">UGX {netWithdrawalUGX.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
 
             {/* Quick preset buttons */}
             <div className="flex gap-2 mt-2">
@@ -274,7 +306,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 flex items-start gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-amber-800 leading-snug">
-                  <span className="font-bold">Approval Process:</span> Withdrawal requests are placed in <span className="font-semibold underline">Pending</span> status and deducted/dispatched to your account upon administrator authorization.
+                  <span className="font-bold">Approval Process:</span> A <span className="font-semibold underline">15% transaction fee</span> is deducted from every withdrawal. Requests are placed in <span className="font-semibold underline">Pending</span> status and deducted/dispatched to your account upon administrator authorization.
                 </p>
               </div>
             </div>
@@ -297,7 +329,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               ? 'Processing Transaction...'
               : mode === 'deposit'
                 ? `Confirm Deposit of UGX ${numUGX.toLocaleString()}`
-                : `Submit Withdrawal of UGX ${numUGX.toLocaleString()}`}
+                : `Submit Withdrawal of UGX ${netWithdrawalUGX.toLocaleString()}`}
           </button>
         </div>
       </div>
