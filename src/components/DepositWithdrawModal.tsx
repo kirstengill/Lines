@@ -32,8 +32,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   const withdrawalFeeUGX = mode === 'withdraw' ? Math.round(numUGX * WITHDRAWAL_FEE_RATE) : 0;
   const netWithdrawalUGX = mode === 'withdraw' ? numUGX - withdrawalFeeUGX : numUGX;
 
-  // Deposit receiving line (Airtel). Users send money directly via their own network's USSD.
-  const DEPOSIT_PHONE = '0706403754';
+  // Deposit receiving line (MTN). Users send money directly via their own network's USSD.
+  const DEPOSIT_PHONE = '0766495353';
   const depositUssd =
     activeTab === 'airtel'
       ? `*185*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`
@@ -121,7 +121,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
             <label className="text-[12px] font-semibold text-slate-600 mb-1.5 block">
               Uganda Sovereign Payment Channel
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${mode === 'deposit' ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <button
                 type="button"
                 onClick={() => {
@@ -152,20 +152,22 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 <span className="text-[11px] block font-bold">Airtel Money</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('bank');
-                  if (mode === 'withdraw') setRecipient('Stanbic Bank - 9030018829104');
-                }}
-                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'bank'
-                  ? 'border-[#1657D9] bg-blue-50/70 text-[#1657D9] font-bold shadow-xs'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-              >
-                <CreditCard className="w-4 h-4 mx-auto mb-1 text-blue-600" />
-                <span className="text-[11px] block font-bold">Bank Transfer</span>
-              </button>
+              {mode === 'withdraw' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('bank');
+                    setRecipient('Stanbic Bank - 9030018829104');
+                  }}
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${activeTab === 'bank'
+                    ? 'border-[#1657D9] bg-blue-50/70 text-[#1657D9] font-bold shadow-xs'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                >
+                  <CreditCard className="w-4 h-4 mx-auto mb-1 text-blue-600" />
+                  <span className="text-[11px] block font-bold">Bank Transfer</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -242,7 +244,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (Sunrise Capital DS). Your chosen amount is already included in the code.
+                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (SolNova Capital — MTN line). Your chosen amount is already included in the code.
                   </p>
                 </div>
               )}
@@ -265,17 +267,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (Sunrise Capital DS — Airtel line). Your chosen amount is already included in the code.
+                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (SolNova Capital — MTN line). Your chosen amount is already included in the code.
                   </p>
-                </div>
-              )}
-
-              {activeTab === 'bank' && (
-                <div className="text-[12px] text-slate-700 space-y-1">
-                  <p className="font-bold text-slate-900">Stanbic Bank Uganda Limited</p>
-                  <p className="text-slate-600 font-mono text-[11.5px]">Account: 9030018829104</p>
-                  <p className="text-slate-600 font-mono text-[11.5px]">Account Name: Sunrise Capital DS Uganda Ltd</p>
-                  <p className="text-slate-500 text-[11px]">Branch: Forest Mall Lugogo, Kampala</p>
                 </div>
               )}
 

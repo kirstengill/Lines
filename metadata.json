@@ -1,6 +1,6 @@
 {
-  "name": "Sunrise Capital - DS Platform",
-  "description": "Clean, modern mobile asset investment dashboard and mining hardware portfolio with real-time analytics, consolidated wallet, and machine management.",
+  "name": "SolNova Capital — Solar Mining & Investment",
+  "description": "Clean, modern mobile solar asset investment dashboard and mining hardware portfolio with real-time analytics, consolidated UGX wallet, and mining node management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

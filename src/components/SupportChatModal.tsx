@@ -11,7 +11,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     {
       id: 'm1',
       sender: 'support',
-      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with your mining plans, UGX reward payouts, or wallet today?',
+      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353), withdrawals, or referral earnings today?',
       timestamp: 'Just now',
     },
   ]);
@@ -19,10 +19,11 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
   const [isTyping, setIsTyping] = useState(false);
 
   const quickQuestions = [
-    'How do DS-Mining Shoe rewards work?',
-    'When are daily UGX payouts settled?',
-    'How to deposit via MTN / Airtel Mobile Money?',
-    'What is the minimum investment for Solar-Mech 10?',
+    'What are the investment plans & daily earnings?',
+    'How do I deposit via MTN MoMo (0766495353)?',
+    'What is the minimum withdrawal & 15% fee?',
+    'How does the 15% referral bonus work?',
+    'How do I harvest/claim daily mining yields?',
   ];
 
   const handleSend = (textToSend?: string) => {
@@ -41,17 +42,50 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     setIsTyping(true);
 
     setTimeout(() => {
-      let reply = "Our support team and DS-Algorithm have received your inquiry. All hardware rewards are calculated every block cycle and credited automatically to your Consolidated Wallet.";
+      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 4,000), or earning 15% referral commissions.";
 
       const lower = text.toLowerCase();
-      if (lower.includes('shoe') || lower.includes('ds-mining shoe')) {
-        reply = "The DS-MINING SHOE (Series 1) utilizes advanced kinetic-electro hybrid dynamos paired with ASIC micro-processors. It generates UGX 1,200,000 daily rewards with an estimated 135% yearly ROI!";
-      } else if (lower.includes('solar') || lower.includes('mower')) {
-        reply = "The SOLAR-MECH 10 combines autonomous solar panel arrays with dual kinetic mowers, generating UGX 212,328 per day with zero grid power costs.";
-      } else if (lower.includes('payout') || lower.includes('settled') || lower.includes('ugx')) {
-        reply = "Daily payouts are automatically aggregated at 00:00 UTC and distributed in UGX directly into your Consolidated Dashboard wallet. You can withdraw anytime to MTN/Airtel MoMo or USDT!";
-      } else if (lower.includes('mtn') || lower.includes('airtel') || lower.includes('mobile money') || lower.includes('deposit')) {
-        reply = "To deposit via Mobile Money, tap 'Deposit' in your Consolidated Dashboard, select UGX MoMo, and use Merchant code *165*3*991204# under Sunrise Capital DS Ltd.";
+
+      if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price')) {
+        reply = "Here is our current SolNova Solar Mining catalog:\n\n" +
+          "• Starter Plan: UGX 15,000 → UGX 3,500/day\n" +
+          "• Solar-Mech 10: UGX 20,000 → UGX 4,300/day\n" +
+          "• DS-Mining Shoe: UGX 30,000 → UGX 6,750/day\n" +
+          "• Clean Hydro Turbine X500: UGX 50,000 → UGX 11,500/day\n" +
+          "• Quantum Grid VIP-9000: UGX 100,000 → UGX 24,000/day\n\n" +
+          "Each active node earns daily yields that you can harvest directly to your wallet!";
+      } else if (lower.includes('starter')) {
+        reply = "The Starter Plan (Solar Miner Mini) costs UGX 15,000 and generates UGX 3,500 daily rewards (est. 8,517% annual ROI). It is the perfect entry-level solar mining node!";
+      } else if (lower.includes('solar-mech') || lower.includes('mech 10') || lower.includes('mower')) {
+        reply = "The Solar-Mech 10 costs UGX 20,000 and generates UGX 4,300 daily rewards with dual kinetic mowers and zero grid power costs.";
+      } else if (lower.includes('shoe') || lower.includes('ds-mining shoe')) {
+        reply = "The DS-Mining Shoe (Series 1) costs UGX 30,000 and generates UGX 6,750 daily rewards using kinetic-electro hybrid dynamos paired with ASIC processors.";
+      } else if (lower.includes('hydro') || lower.includes('turbine')) {
+        reply = "The Clean Hydro Turbine X500 costs UGX 50,000 and generates UGX 11,500 daily rewards (118.0 TH/s hashrate).";
+      } else if (lower.includes('quantum') || lower.includes('vip')) {
+        reply = "The Quantum Grid VIP-9000 costs UGX 100,000 and generates UGX 24,000 daily rewards (1,250.0 TH/s institutional hashrate).";
+      } else if (lower.includes('deposit') || lower.includes('mtn') || lower.includes('airtel') || lower.includes('momo') || lower.includes('pay') || lower.includes('phone') || lower.includes('number') || lower.includes('0766495353')) {
+        reply = "To make a deposit:\n\n" +
+          "1. Tap 'Deposit' on your dashboard.\n" +
+          "2. Send money to our official receiving line: 0766495353 (SolNova Capital — MTN line).\n" +
+          "• MTN USSD: *165*1*1*0766495353*[AMOUNT]#\n" +
+          "• Airtel USSD: *185*1*1*0766495353*[AMOUNT]#\n" +
+          "3. Submit your deposit request in the app. Your wallet balance will be credited promptly upon verification!";
+      } else if (lower.includes('withdraw') || lower.includes('cash out') || lower.includes('fee') || lower.includes('minimum')) {
+        reply = "Withdrawal Guidelines:\n\n" +
+          "• Minimum Withdrawal: UGX 4,000.\n" +
+          "• Transaction Fee: 15% standard processing fee.\n" +
+          "• Channels: MTN MoMo, Airtel Money, or Stanbic Bank.\n" +
+          "• Approvals: Requests are processed by administrators and dispatched directly to your mobile money or bank account.";
+      } else if (lower.includes('referral') || lower.includes('invite') || lower.includes('commission') || lower.includes('bonus') || lower.includes('friend')) {
+        reply = "SolNova Referral Program:\n\n" +
+          "• You earn 15% commission on every approved deposit made by users who register using your referral link/code!\n" +
+          "• Example: If your friend deposits UGX 100,000, you receive UGX 15,000 directly in your wallet.\n" +
+          "• All new users also get a UGX 4,000 welcome bonus upon signup.";
+      } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('payout')) {
+        reply = "Daily yields accumulate continuously on your active mining nodes. Simply tap the 'Harvest' or 'Claim' button on any active machine in your Dashboard or Machines tab to credit the UGX directly into your Consolidated Wallet!";
+      } else if (lower.includes('bank') || lower.includes('stanbic')) {
+        reply = "Bank Transfer Details (Withdrawals):\n• Bank: Stanbic Bank Uganda Limited\n• Account Number: 9030018829104\n• Account Name: SolNova Capital Uganda Ltd\n• Branch: Forest Mall Lugogo, Kampala\n\nNote: Deposits are processed via MTN MoMo and Airtel Money to 0766495353.";
       }
 
       setMessages((prev) => [
@@ -64,7 +98,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
         },
       ]);
       setIsTyping(false);
-    }, 700);
+    }, 600);
   };
 
   return (
@@ -113,7 +147,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
                 {m.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
               <div
-                className={`max-w-[80%] rounded-2xl p-3 text-[13px] leading-relaxed ${
+                className={`max-w-[80%] rounded-2xl p-3 text-[13px] leading-relaxed whitespace-pre-line ${
                   m.sender === 'user'
                     ? 'bg-[#1657D9] text-white rounded-tr-xs'
                     : 'bg-white text-slate-800 border border-slate-200/80 shadow-xs rounded-tl-xs'
