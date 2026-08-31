@@ -61,6 +61,7 @@ export interface Transaction {
   description: string;
   paymentMethod?: string;
   recipientInfo?: string;
+  senderPhone?: string;
   txHash?: string;
   approvedAt?: string;
   rejectedAt?: string;

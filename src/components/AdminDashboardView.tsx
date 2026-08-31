@@ -1349,10 +1349,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <span className="font-bold text-slate-800">{tx.paymentMethod || 'MTN / Airtel Money'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10.5px]">Reference / Recipient</span>
-                        <span className="font-mono font-bold text-slate-800 truncate block">
-                          {tx.recipientInfo || 'SolNova Financial Core'}
+                        <span className="text-slate-400 block text-[10.5px]">
+                          {isDeposit ? 'Depositor Phone / Route' : 'Reference / Recipient'}
                         </span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono font-bold text-slate-800 text-[11.5px] truncate block">
+                            {tx.recipientInfo || (isDeposit ? 'Direct Mobile Money' : 'SolNova Financial Core')}
+                          </span>
+                          {tx.recipientInfo && (
+                            <button
+                              onClick={() => handleCopyText(tx.recipientInfo!, `tx-ref-${tx.id}`, 'Reference')}
+                              className="text-slate-400 hover:text-slate-700 p-0.5 shrink-0 cursor-pointer"
+                              title="Copy Depositor / Reference Info"
+                            >
+                              {copiedId === `tx-ref-${tx.id}` ? (
+                                <CheckCheck className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Transaction ID</span>
@@ -1360,7 +1377,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <span className="font-mono text-[11px] text-slate-600 truncate block">{tx.id}</span>
                           <button
                             onClick={() => handleCopyText(tx.id, `tx-id-${tx.id}`, 'Tx ID')}
-                            className="text-slate-400 hover:text-slate-700 p-0.5"
+                            className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
                             title="Copy Transaction ID"
                           >
                             {copiedId === `tx-id-${tx.id}` ? (

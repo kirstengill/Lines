@@ -37,6 +37,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
   const [amountUGXStr, setAmountUGXStr] = useState<string>('50000');
+  const [depositorPhone, setDepositorPhone] = useState<string>('');
   const [recipient, setRecipient] = useState<string>('0772 123 456 (MTN MoMo)');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,6 +67,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       return;
     }
 
+    if (mode === 'deposit') {
+      const cleanPhone = depositorPhone.trim().replace(/\s+/g, '');
+      if (!cleanPhone || cleanPhone.length < 9) {
+        setErrorMessage('Please enter the phone number you are depositing from (minimum 9 digits).');
+        return;
+      }
+    }
+
     // REQUIREMENT 6: Minimum withdrawal amount
     if (mode === 'withdraw' && numUGX < MIN_WITHDRAWAL_UGX) {
       setErrorMessage(`Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`);
@@ -88,12 +97,19 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           : activeTab === 'airtel'
             ? 'Airtel Money Uganda'
             : 'Stanbic Bank EFT';
+
+      const cleanSender = depositorPhone.trim();
       const desc =
         mode === 'deposit'
-          ? `${channelName} Deposit (to ${RECIPIENT_NAME})`
+          ? `Deposit UGX ${numUGX.toLocaleString()} (Sender: ${cleanSender})`
           : `Payout Request to ${recipient}`;
 
-      onSuccess(netWithdrawalUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : `${RECIPIENT_NAME} (${DEPOSIT_PHONE})`);
+      const referenceInfo =
+        mode === 'deposit'
+          ? `Sender: ${cleanSender} → To: ${RECIPIENT_NAME} (${DEPOSIT_PHONE})`
+          : recipient;
+
+      onSuccess(netWithdrawalUGX, mode, desc, channelName, referenceInfo);
       onClose();
     }, 600);
   };
@@ -239,6 +255,29 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           {/* Details / Step-by-Step Instructions for Deposit vs Withdraw */}
           {mode === 'deposit' ? (
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3.5">
+              {/* Depositor's Phone Number Input Field */}
+              <div className="bg-white rounded-2xl p-3.5 border border-blue-200/80 shadow-2xs space-y-1.5">
+                <label className="text-[12px] font-bold text-slate-800 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <Smartphone className="w-4 h-4 text-blue-600" />
+                    Your Phone Number (Depositing From) <span className="text-red-500">*</span>
+                  </span>
+                  <span className="text-[10.5px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    Required
+                  </span>
+                </label>
+                <input
+                  type="tel"
+                  value={depositorPhone}
+                  onChange={(e) => setDepositorPhone(e.target.value)}
+                  placeholder="e.g. 0772 123 456 or 0766 000 000"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 font-mono tracking-wide placeholder:font-normal placeholder:text-slate-400"
+                />
+                <p className="text-[10.5px] text-slate-500 leading-tight">
+                  Enter the phone number you are sending money from. This number is attached to your deposit transaction so administrators can immediately match and credit your balance.
+                </p>
+              </div>
+
               {/* Recipient Card */}
               <div className="bg-gradient-to-br from-indigo-900 via-blue-900 to-slate-900 text-white rounded-2xl p-3.5 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
