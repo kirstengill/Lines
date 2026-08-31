@@ -1,10 +1,26 @@
 import React, { useState } from 'react';
-import { X, ArrowDownLeft, ArrowUpRight, Copy, Check, Smartphone, CreditCard, ShieldAlert } from 'lucide-react';
+import {
+  X,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Copy,
+  Check,
+  Smartphone,
+  CreditCard,
+  ShieldAlert,
+  UserCheck,
+  PhoneCall,
+  CheckCircle2
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // Withdrawal rules
 const MIN_WITHDRAWAL_UGX = 4000;
 const WITHDRAWAL_FEE_RATE = 0.15; // 15% transaction fee
+
+// Deposit receiving line details
+const DEPOSIT_PHONE = '0766495353';
+const RECIPIENT_NAME = 'ELIX OWOMUZINYA';
 
 interface DepositWithdrawModalProps {
   mode: 'deposit' | 'withdraw';
@@ -20,9 +36,9 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   onSuccess,
 }) => {
   const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
-  const [amountUGXStr, setAmountUGXStr] = useState<string>('500000');
+  const [amountUGXStr, setAmountUGXStr] = useState<string>('50000');
   const [recipient, setRecipient] = useState<string>('0772 123 456 (MTN MoMo)');
-  const [copied, setCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -32,17 +48,15 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   const withdrawalFeeUGX = mode === 'withdraw' ? Math.round(numUGX * WITHDRAWAL_FEE_RATE) : 0;
   const netWithdrawalUGX = mode === 'withdraw' ? numUGX - withdrawalFeeUGX : numUGX;
 
-  // Deposit receiving line (MTN). Users send money directly via their own network's USSD.
-  const DEPOSIT_PHONE = '0766495353';
   const depositUssd =
     activeTab === 'airtel'
       ? `*185*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`
       : `*165*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`;
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
   const handleAction = () => {
@@ -76,14 +90,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
             : 'Stanbic Bank EFT';
       const desc =
         mode === 'deposit'
-          ? `${channelName} Deposit Request`
+          ? `${channelName} Deposit (to ${RECIPIENT_NAME})`
           : `Payout Request to ${recipient}`;
 
-      onSuccess(netWithdrawalUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : undefined);
+      onSuccess(netWithdrawalUGX, mode, desc, channelName, mode === 'withdraw' ? recipient : `${RECIPIENT_NAME} (${DEPOSIT_PHONE})`);
       onClose();
     }, 600);
   };
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -108,7 +121,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -119,7 +132,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           {/* Method Selector */}
           <div>
             <label className="text-[12px] font-semibold text-slate-600 mb-1.5 block">
-              Uganda Sovereign Payment Channel
+              {mode === 'deposit' ? 'Select Your Mobile Money Network' : 'Uganda Sovereign Payment Channel'}
             </label>
             <div className={`grid gap-2 ${mode === 'deposit' ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <button
@@ -185,7 +198,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 type="number"
                 value={amountUGXStr}
                 onChange={(e) => setAmountUGXStr(e.target.value)}
-                placeholder="500000"
+                placeholder="50000"
                 className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 font-mono"
               />
             </div>
@@ -210,12 +223,12 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
             {/* Quick preset buttons */}
             <div className="flex gap-2 mt-2">
-              {[100000, 500000, 2000000, 10000000].map((preset) => (
+              {[15000, 20000, 30000, 50000, 100000].map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setAmountUGXStr(preset.toString())}
-                  className="flex-1 py-1 text-[10.5px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                  className="flex-1 py-1 text-[10.5px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
                 >
                   +{preset >= 1000000 ? `${preset / 1000000}M` : `${preset / 1000}k`}
                 </button>
@@ -223,54 +236,163 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
             </div>
           </div>
 
-          {/* Details / Instructions for Deposit vs Withdraw */}
+          {/* Details / Step-by-Step Instructions for Deposit vs Withdraw */}
           {mode === 'deposit' ? (
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
-              {activeTab === 'mtn' && (
-                <div>
-                  <span className="text-[11px] font-bold text-slate-700 block uppercase">
-                    MTN MOMO — SEND MONEY USSD CODE
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3.5">
+              {/* Recipient Card */}
+              <div className="bg-gradient-to-br from-indigo-900 via-blue-900 to-slate-900 text-white rounded-2xl p-3.5 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-200 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-amber-300" /> Authorized Recipient
                   </span>
-                  <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 mt-1">
-                    <span className="font-mono font-bold text-slate-900 text-[14px]">
-                      {depositUssd}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(depositUssd)}
-                      className="text-xs font-semibold text-blue-600 flex items-center gap-1 hover:text-blue-800"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5">
-                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (SolNova Capital — MTN line). Your chosen amount is already included in the code.
-                  </p>
+                  <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Verified Name
+                  </span>
                 </div>
-              )}
 
-              {activeTab === 'airtel' && (
-                <div>
-                  <span className="text-[11px] font-bold text-slate-700 block uppercase">
-                    AIRTEL MONEY — SEND MONEY USSD CODE
-                  </span>
-                  <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 mt-1">
-                    <span className="font-mono font-bold text-slate-900 text-[14px]">
-                      {depositUssd}
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <span className="text-[10.5px] text-slate-300 block font-medium">Recipient Name</span>
+                    <span className="text-[15px] font-black tracking-wide text-amber-300 block font-mono">
+                      {RECIPIENT_NAME}
                     </span>
-                    <button
-                      onClick={() => handleCopy(depositUssd)}
-                      className="text-xs font-semibold text-blue-600 flex items-center gap-1 hover:text-blue-800"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5">
-                    Dial this code to send <span className="font-semibold text-slate-700">UGX {numUGX.toLocaleString()}</span> to <span className="font-semibold text-slate-700">{DEPOSIT_PHONE}</span> (SolNova Capital — MTN line). Your chosen amount is already included in the code.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(RECIPIENT_NAME, 'name')}
+                    className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Copy Name"
+                  >
+                    {copiedKey === 'name' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'name' ? 'Copied' : 'Copy'}</span>
+                  </button>
                 </div>
-              )}
+
+                <div className="flex items-center justify-between border-t border-white/10 pt-2">
+                  <div>
+                    <span className="text-[10.5px] text-slate-300 block font-medium">MTN Phone Number</span>
+                    <span className="text-[14px] font-black text-white font-mono block">
+                      {DEPOSIT_PHONE}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(DEPOSIT_PHONE, 'phone')}
+                    className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Copy Phone Number"
+                  >
+                    {copiedKey === 'phone' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'phone' ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Dial One-Tap Box */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
+                    <PhoneCall className="w-3.5 h-3.5 text-blue-600" /> Quick USSD Dial Code
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">Auto-fills amount</span>
+                </div>
+                <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="font-mono font-bold text-slate-900 text-[13px] break-all">
+                    {depositUssd}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(depositUssd, 'ussd')}
+                    className="shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-xs font-bold text-blue-600 flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    {copiedKey === 'ussd' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'ussd' ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Step-by-Step USSD Instructions */}
+              <div className="space-y-2 pt-0.5">
+                <span className="text-[11.5px] font-bold text-slate-800 block">
+                  Step-by-Step USSD Guide ({activeTab === 'mtn' ? 'MTN MoMo' : 'Airtel Money'}):
+                </span>
+
+                <div className="space-y-2 text-[12px] text-slate-700 bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <div>
+                      <span>Dial </span>
+                      <strong className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-900">
+                        {activeTab === 'mtn' ? '*165#' : '*185#'}
+                      </strong>
+                      <span> on your mobile phone keypad.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <div>
+                      <span>Select </span>
+                      <strong className="font-semibold text-slate-900">1 (Send Money)</strong>
+                      <span> → </span>
+                      <strong className="font-semibold text-slate-900">
+                        {activeTab === 'mtn' ? '1 (Mobile User)' : '1 (To Mobile / Other Networks)'}
+                      </strong>.
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <div>
+                      <span>Enter Recipient Number: </span>
+                      <strong className="font-mono text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-bold">
+                        {DEPOSIT_PHONE}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      4
+                    </span>
+                    <div>
+                      <span>Enter Amount: </span>
+                      <strong className="font-mono text-slate-900 font-bold">
+                        UGX {numUGX.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      5
+                    </span>
+                    <div>
+                      <span>Confirm that the recipient name shows </span>
+                      <strong className="text-amber-800 bg-amber-50 px-1 py-0.5 rounded font-extrabold">
+                        {RECIPIENT_NAME}
+                      </strong>
+                      <span>, then enter your PIN to authorize.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 pt-0.5 border-t border-slate-100">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      6
+                    </span>
+                    <div>
+                      <span>After sending, tap the </span>
+                      <strong className="text-blue-700 font-bold">Confirm Deposit</strong>
+                      <span> button below to submit your request for fast approval!</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Requirement 1: Deposit Approval Notice */}
               <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 flex items-start gap-2">
@@ -329,3 +451,4 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
     </div>
   );
 };
+

@@ -11,7 +11,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     {
       id: 'm1',
       sender: 'support',
-      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353), withdrawals, or referral earnings today?',
+      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353 - ELIX OWOMUZINYA), withdrawals, or referral earnings today?',
       timestamp: 'Just now',
     },
   ]);
@@ -20,7 +20,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
 
   const quickQuestions = [
     'What are the investment plans & daily earnings?',
-    'How do I deposit via MTN MoMo (0766495353)?',
+    'How do I deposit via USSD (0766495353 - ELIX OWOMUZINYA)?',
     'What is the minimum withdrawal & 15% fee?',
     'How does the 15% referral bonus work?',
     'How do I harvest/claim daily mining yields?',
@@ -64,13 +64,16 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
         reply = "The Clean Hydro Turbine X500 costs UGX 50,000 and generates UGX 11,500 daily rewards (118.0 TH/s hashrate).";
       } else if (lower.includes('quantum') || lower.includes('vip')) {
         reply = "The Quantum Grid VIP-9000 costs UGX 100,000 and generates UGX 24,000 daily rewards (1,250.0 TH/s institutional hashrate).";
-      } else if (lower.includes('deposit') || lower.includes('mtn') || lower.includes('airtel') || lower.includes('momo') || lower.includes('pay') || lower.includes('phone') || lower.includes('number') || lower.includes('0766495353')) {
-        reply = "To make a deposit:\n\n" +
-          "1. Tap 'Deposit' on your dashboard.\n" +
-          "2. Send money to our official receiving line: 0766495353 (SolNova Capital — MTN line).\n" +
-          "• MTN USSD: *165*1*1*0766495353*[AMOUNT]#\n" +
-          "• Airtel USSD: *185*1*1*0766495353*[AMOUNT]#\n" +
-          "3. Submit your deposit request in the app. Your wallet balance will be credited promptly upon verification!";
+      } else if (lower.includes('deposit') || lower.includes('mtn') || lower.includes('airtel') || lower.includes('momo') || lower.includes('pay') || lower.includes('phone') || lower.includes('number') || lower.includes('0766495353') || lower.includes('elix') || lower.includes('owomuzinya')) {
+        reply = "Step-by-Step Deposit Instructions:\n\n" +
+          "1. Dial *165# (MTN) or *185# (Airtel) on your phone.\n" +
+          "2. Select 1 (Send Money) → 1 (To Mobile User).\n" +
+          "3. Enter Recipient Number: 0766495353\n" +
+          "4. Enter your Deposit Amount in UGX.\n" +
+          "5. Confirm recipient name shows ELIX OWOMUZINYA and enter your PIN.\n" +
+          "6. Return to the app and tap 'Confirm Deposit' to submit your request for fast approval!\n\n" +
+          "• Quick MTN USSD: *165*1*1*0766495353*[AMOUNT]#\n" +
+          "• Quick Airtel USSD: *185*1*1*0766495353*[AMOUNT]#";
       } else if (lower.includes('withdraw') || lower.includes('cash out') || lower.includes('fee') || lower.includes('minimum')) {
         reply = "Withdrawal Guidelines:\n\n" +
           "• Minimum Withdrawal: UGX 4,000.\n" +
