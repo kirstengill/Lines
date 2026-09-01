@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Zap, Cpu, Activity, Thermometer, ShieldCheck, ArrowUpRight, CheckCircle2, RotateCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Machine } from '../types';
+import { ProjectImage } from './ProjectImage';
 
 interface ManageMachineModalProps {
   machine: Machine | null;
@@ -77,11 +78,11 @@ export const ManageMachineModal: React.FC<ManageMachineModalProps> = ({
         <div className="p-5 space-y-4">
           {/* Hardware visual banner */}
           <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
-            <div className="w-24 h-24 bg-white rounded-xl p-1.5 border border-slate-200/80 shadow-xs shrink-0 flex items-center justify-center">
-              <img
+            <div className="w-24 h-24 bg-white rounded-xl p-1.5 border border-slate-200/80 shadow-xs shrink-0 flex items-center justify-center overflow-hidden">
+              <ProjectImage
                 src={machine.image}
                 alt={machine.title}
-                referrerPolicy="no-referrer"
+                fallbackCategory={machine.category}
                 className="w-full h-full object-contain mix-blend-multiply"
               />
             </div>

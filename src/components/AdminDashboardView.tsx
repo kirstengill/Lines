@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   Zap,
@@ -39,7 +39,9 @@ import {
   ChevronRight,
   Hash,
   Tag,
-  Wallet
+  Wallet,
+  UploadCloud,
+  Image as ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -53,6 +55,7 @@ import {
 import { authService } from '../services/supabaseAuth';
 import { apiClient } from '../services/apiClient';
 import { getSupabaseClient } from '../services/supabase';
+import { ProjectImage } from './ProjectImage';
 
 interface AdminDashboardViewProps {
   tasks: AdminTask[];
@@ -134,6 +137,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectFormError, setProjectFormError] = useState('');
   const [projectFormLoading, setProjectFormLoading] = useState(false);
+
+  // Project Image Upload State (Supabase Storage: bucket 'project-images')
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
+  const [imageUploadSuccess, setImageUploadSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<BalanceAdjustment[]>([]);
@@ -466,14 +475,72 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  // Handle Image File Upload to Supabase Storage
+  const handleImageFileUpload = async (file: File) => {
+    setImageUploadError('');
+    setImageUploadSuccess(false);
+
+    // 1. Validate file type
+    if (!file.type || !file.type.startsWith('image/')) {
+      setImageUploadError('Invalid format. Please select an image file (PNG, JPG, WebP, or SVG).');
+      return;
+    }
+
+    // 2. Validate file size (max 5 MB)
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setImageUploadError(`Image file is too large (${sizeMB} MB). Maximum size is 5 MB.`);
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const res = await authService.uploadProjectImage(file);
+      if (res.error || !res.publicUrl) {
+        setImageUploadError(res.error || 'Failed to upload image to Supabase Storage.');
+      } else {
+        // Set the permanent Supabase public URL into the editing project state
+        setEditingProject((prev) => (prev ? { ...prev, image: res.publicUrl } : null));
+        setImageUploadSuccess(true);
+        showToast('Image uploaded successfully to Supabase Storage bucket "project-images".');
+      }
+    } catch (err: any) {
+      setImageUploadError(err.message || 'Image upload failed.');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   // Handle Save Project (Create / Edit in Supabase)
   const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProject) return;
     setProjectFormError('');
 
+    if (imageUploading) {
+      setProjectFormError('Please wait for image upload to Supabase Storage to finish before saving.');
+      return;
+    }
+
+    if (imageUploadError) {
+      setProjectFormError(`Please resolve the image error: ${imageUploadError}`);
+      return;
+    }
+
     if (!editingProject.title || !editingProject.minInvestUGX) {
       setProjectFormError('Project Title and Minimum Investment amount are required.');
+      return;
+    }
+
+    // Never save a local file path, blob: URL, temporary browser URL, or base64 image
+    if (
+      editingProject.image &&
+      (editingProject.image.startsWith('blob:') ||
+        editingProject.image.startsWith('data:') ||
+        editingProject.image.startsWith('file://'))
+    ) {
+      setProjectFormError('Temporary or local image URLs cannot be saved. Please upload the image file to Supabase Storage.');
       return;
     }
 
@@ -487,6 +554,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           showToast(`New Project "${editingProject.title}" added to investment catalog in Supabase.`);
           setEditingProject(null);
           setIsCreatingProject(false);
+          setImageUploadError('');
+          setImageUploadSuccess(false);
           await loadCatalogProjects();
         }
       } else if (editingProject.id) {
@@ -496,6 +565,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         } else {
           showToast(`Project "${editingProject.title}" updated successfully in Supabase.`);
           setEditingProject(null);
+          setImageUploadError('');
+          setImageUploadSuccess(false);
           await loadCatalogProjects();
         }
       }
@@ -1940,9 +2011,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   hashrate: '60.0 TH/s',
                   powerSource: 'Solar / Hybrid Dynamo',
                   status: 'Active',
-                  image: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+                  image: '',
                 });
                 setProjectFormError('');
+                setImageUploadError('');
+                setImageUploadSuccess(false);
               }}
               className="bg-[#1657D9] hover:bg-blue-700 text-white font-bold text-[12.5px] px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
@@ -1965,12 +2038,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 >
                   <div className="p-4 space-y-3">
                     <div className="flex gap-3">
-                      <img
-                        src={proj.image}
-                        alt={proj.title}
-                        referrerPolicy="no-referrer"
-                        className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shrink-0"
-                      />
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50 flex items-center justify-center p-1">
+                        <ProjectImage
+                          src={proj.image}
+                          alt={proj.title}
+                          fallbackCategory={proj.category}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
                       <div>
                         <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                           {proj.category}
@@ -2023,6 +2098,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           setIsCreatingProject(false);
                           setEditingProject(proj);
                           setProjectFormError('');
+                          setImageUploadError('');
+                          setImageUploadSuccess(false);
                         }}
                         className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[11.5px] px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
                       >
@@ -2813,17 +2890,95 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                  Image URL
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={editingProject.image || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject, image: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12.5px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
+              {/* Supabase Storage Image Upload & Live Preview */}
+              <div className="bg-slate-50/90 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[12.5px] font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4 text-blue-600" />
+                    Project Image (Supabase Storage)
+                  </label>
+                  {imageUploadSuccess && (
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Stored in Supabase Storage
+                    </span>
+                  )}
+                </div>
+
+                {/* Live Preview & Upload Button */}
+                <div className="flex items-center gap-3.5">
+                  <div className="w-20 h-20 bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden shrink-0 flex items-center justify-center p-1.5">
+                    <ProjectImage
+                      src={editingProject.image}
+                      alt={editingProject.title || 'Project Preview'}
+                      fallbackCategory={editingProject.category}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleImageFileUpload(file);
+                        }
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      disabled={imageUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-2.5 px-3.5 bg-white hover:bg-slate-100 active:scale-[0.99] border border-slate-300 hover:border-blue-500 text-slate-800 font-bold text-[12.5px] rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-60"
+                    >
+                      {imageUploading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                          <span className="text-blue-700">Uploading to Supabase Storage...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4 text-blue-600" />
+                          <span>{editingProject.image ? 'Replace / Upload New Image' : 'Select Image from Device'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                      PNG, JPG, WebP or SVG (max 5 MB). Uploads directly to bucket <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-[10.5px] font-mono text-slate-800">project-images</code>.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Upload Error Banner */}
+                {imageUploadError && (
+                  <div className="p-2.5 rounded-xl bg-red-50 text-red-700 text-[11.5px] font-medium border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span className="flex-1">{imageUploadError}</span>
+                  </div>
+                )}
+
+                {/* Image URL Manual Inspection / Fallback Input */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    Direct Public Image URL:
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://...supabase.co/storage/v1/object/public/project-images/..."
+                    value={editingProject.image || ''}
+                    onChange={(e) => {
+                      setImageUploadSuccess(false);
+                      setImageUploadError('');
+                      setEditingProject({ ...editingProject, image: e.target.value });
+                    }}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[12px] font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">

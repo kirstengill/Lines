@@ -685,6 +685,10 @@ class AuthService {
     return supabaseAdmin.claimInvestmentYield(investmentId);
   }
 
+  public async uploadProjectImage(file: File): Promise<{ publicUrl?: string; error?: string }> {
+    return supabaseAdmin.uploadProjectImage(file);
+  }
+
   public async fetchCatalogMachines(): Promise<{ machines: Machine[]; error?: string }> {
     return supabaseAdmin.fetchCatalogMachines();
   }

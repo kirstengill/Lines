@@ -209,6 +209,77 @@ export const supabaseAdmin = {
   },
 
   // ---------- DYNAMIC PRODUCTS CATALOG (Stored in Supabase catalog_machines) ----------
+  async uploadProjectImage(file: File): Promise<{ publicUrl?: string; error?: string }> {
+    const sb = getSupabaseClient();
+    if (!sb) {
+      return { error: 'Database connection is not initialized. Please refresh and try again.' };
+    }
+
+    // 1. Validate file format
+    if (!file.type || !file.type.startsWith('image/')) {
+      return { error: 'Invalid file format. Please upload a valid image file (PNG, JPG, JPEG, WebP, or SVG).' };
+    }
+
+    // 2. Validate file size (max 5 MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      return { error: `Image file is too large (${sizeMB} MB). Maximum allowed size is 5 MB.` };
+    }
+
+    const bucketName = 'project-images';
+
+    try {
+      // Ensure the public bucket exists if allowed by permissions
+      try {
+        const { data: bucketData, error: bucketError } = await sb.storage.getBucket(bucketName);
+        if (bucketError || !bucketData) {
+          await sb.storage.createBucket(bucketName, {
+            public: true,
+            fileSizeLimit: 5242880,
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml', 'image/gif'],
+          });
+        }
+      } catch (bucketCatch) {
+        // Bucket may already exist or getBucket might be restricted; proceed with direct upload
+        console.log('[Supabase Storage] Bucket check/create note:', bucketCatch);
+      }
+
+      // Generate a unique, safe file path
+      const fileExt = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const rawBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
+      const uniquePath = `products/${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${rawBaseName}.${fileExt}`;
+
+      // Upload file directly to Supabase Storage
+      const { data: uploadData, error: uploadError } = await sb.storage
+        .from(bucketName)
+        .upload(uniquePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        console.error('[Supabase Storage] Upload failed:', uploadError);
+        return { error: `Failed to upload image to Supabase Storage: ${uploadError.message}` };
+      }
+
+      // Generate public URL using getPublicUrl
+      const { data: urlData } = sb.storage
+        .from(bucketName)
+        .getPublicUrl(uniquePath);
+
+      if (!urlData || !urlData.publicUrl) {
+        return { error: 'Failed to generate public URL from Supabase Storage.' };
+      }
+
+      return { publicUrl: urlData.publicUrl };
+    } catch (err: any) {
+      console.error('[Supabase Storage] Exception during upload:', err);
+      return { error: err?.message || 'Failed to upload project image' };
+    }
+  },
+
   async fetchCatalogMachines(): Promise<{ machines: Machine[]; error?: string }> {
     const sb = getSupabaseClient();
     if (!sb) {

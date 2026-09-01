@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Check, AlertCircle, ArrowUpRight, ShieldCheck, Zap, Wallet, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Machine } from '../types';
+import { ProjectImage } from './ProjectImage';
 
 interface InvestmentPurchaseModalProps {
   machine: Machine | null;
@@ -78,11 +79,11 @@ export const InvestmentPurchaseModal: React.FC<InvestmentPurchaseModalProps> = (
         <div className="p-5 space-y-4">
           {/* Machine Header */}
           <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 flex items-center gap-3">
-            <div className="w-16 h-16 bg-white rounded-xl p-1 border border-slate-200 shrink-0 flex items-center justify-center">
-              <img
+            <div className="w-16 h-16 bg-white rounded-xl p-1 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
+              <ProjectImage
                 src={machine.image}
                 alt={machine.title}
-                referrerPolicy="no-referrer"
+                fallbackCategory={machine.category}
                 className="w-full h-full object-contain mix-blend-multiply"
               />
             </div>

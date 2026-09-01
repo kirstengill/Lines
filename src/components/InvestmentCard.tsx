@@ -1,5 +1,6 @@
 import React from 'react';
 import { Machine } from '../types';
+import { ProjectImage } from './ProjectImage';
 
 interface InvestmentCardProps {
   machine: Machine;
@@ -23,10 +24,10 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
       <div className="flex items-center gap-3">
         {/* Hardware Render Thumbnail */}
         <div className="w-[110px] h-[105px] shrink-0 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center p-1 border border-slate-100">
-          <img
+          <ProjectImage
             src={machine.image}
             alt={machine.title}
-            referrerPolicy="no-referrer"
+            fallbackCategory={machine.category}
             className="w-full h-full object-contain mix-blend-multiply transition-transform duration-300 hover:scale-105"
           />
         </div>
