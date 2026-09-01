@@ -277,10 +277,9 @@ export default function App() {
     description: string,
     paymentMethod?: string,
     recipientInfo?: string
-  ) => {
+  ): Promise<{ success: boolean; error?: string }> => {
     if (isBlocked) {
-      alert('Your account is currently restricted. Please contact administrator.');
-      return;
+      return { success: false, error: 'Your account is currently restricted. Please contact administrator.' };
     }
 
     // Supabase is authoritative: submit_transaction RPC creates the PENDING
@@ -301,16 +300,15 @@ export default function App() {
         );
       }
       if (!res.success) {
-        alert(res.error || 'Failed to submit request.');
-        return;
+        return { success: false, error: res.error || 'Failed to submit request.' };
       }
-    } catch (e: any) {
-      alert(e?.message || 'Failed to submit request.');
-      return;
-    }
 
-    // Reload real state from Supabase so the pending tx + notification appear.
-    await handleRefreshUserData();
+      // Reload real state from Supabase so the pending tx + notification appear.
+      await handleRefreshUserData();
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to submit request.' };
+    }
   };
 
   const handleConfirmInvest = async (machine: Machine, amountUGX: number): Promise<boolean> => {

@@ -468,10 +468,10 @@ class AuthService {
 
         const transactions: Transaction[] = (txRes.data || [])
           .map((t: any) => {
-            const rawTs = Number(t.timestamp) || (t.created_at ? new Date(t.created_at).getTime() : Date.now());
-            const dateStr = t.created_at
-              ? new Date(t.created_at).toLocaleString()
-              : new Date(rawTs).toLocaleString();
+            const dateObj = t.timestamp
+              ? new Date(t.timestamp)
+              : (t.created_at ? new Date(t.created_at) : new Date());
+            const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
             return {
               id: t.id,
               userId: t.user_id,
@@ -482,14 +482,19 @@ class AuthService {
               currency: 'UGX' as const,
               status: (t.status || 'pending') as Transaction['status'],
               date: dateStr,
-              timestamp: rawTs,
+              timestamp: t.timestamp ? String(t.timestamp) : (t.created_at ? String(t.created_at) : undefined),
+              created_at: t.created_at || undefined,
               description: t.description || `${(t.type || 'Transaction').toUpperCase()} Request`,
               paymentMethod: t.payment_method || undefined,
               recipientInfo: t.recipient_info || undefined,
               txHash: t.tx_hash || undefined,
             };
           })
-          .sort((a: Transaction, b: Transaction) => (b.timestamp || 0) - (a.timestamp || 0));
+          .sort((a: Transaction, b: Transaction) => {
+            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+            return timeB - timeA;
+          });
 
         const machines: Machine[] = (machinesRes.data || []).map((m: any) => ({
           id: m.id || m.machine_id,

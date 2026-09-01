@@ -81,7 +81,7 @@ BEGIN
     v_id, v_uid, p_type, p_amount_ugx, 'UGX', 'pending',
     COALESCE(p_description, p_type || ' Request — UGX ' || p_amount_ugx::text),
     p_payment_method, p_recipient_info,
-    (extract(epoch FROM now()) * 1000)::BIGINT,
+    now(),
     now()
   ) RETURNING * INTO v_res;
 
@@ -123,12 +123,12 @@ AS $$
          COALESCE(p.full_name, (u.raw_user_meta_data->>'full_name'), p.username, split_part(u.email, '@', 1), 'Unnamed User') AS user_full_name,
          t.type, t.amount_ugx, t.status,
          t.description, t.payment_method, t.recipient_info,
-         COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) AS created_at
+         COALESCE(t.created_at, now()) AS created_at
   FROM public.transactions t
   LEFT JOIN public.profiles p ON p.id = t.user_id
   LEFT JOIN auth.users u ON u.id = t.user_id
   WHERE t.status = 'pending'
-  ORDER BY COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) ASC;
+  ORDER BY COALESCE(t.created_at, now()) ASC;
 $$;
 
 -- All transactions (for Admin ledger)
@@ -137,7 +137,7 @@ RETURNS TABLE (
   id TEXT, user_id UUID, username TEXT, user_full_name TEXT,
   type TEXT, amount_ugx NUMERIC, currency TEXT, status TEXT,
   description TEXT, payment_method TEXT, recipient_info TEXT,
-  tx_hash TEXT, created_at TIMESTAMPTZ, "timestamp" BIGINT
+  tx_hash TEXT, created_at TIMESTAMPTZ
 )
 LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
@@ -147,12 +147,11 @@ AS $$
          t.type, t.amount_ugx, t.currency, t.status,
          t.description, t.payment_method, t.recipient_info,
          t.tx_hash,
-         COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) AS created_at,
-         COALESCE(t.timestamp, (extract(epoch FROM t.created_at) * 1000)::BIGINT) AS "timestamp"
+         COALESCE(t.created_at, now()) AS created_at
   FROM public.transactions t
   LEFT JOIN public.profiles p ON p.id = t.user_id
   LEFT JOIN auth.users u ON u.id = t.user_id
-  ORDER BY COALESCE(t.created_at, to_timestamp(t.timestamp / 1000.0)) DESC;
+  ORDER BY COALESCE(t.created_at, now()) DESC;
 $$;
 
 -- ============================================================
@@ -394,7 +393,7 @@ BEGIN
     COALESCE(v_user_full_name, 'User'),
     v_prev, p_amount, v_new, p_type, COALESCE(p_reason, 'Admin Adjustment'),
     COALESCE(auth.uid()::text, 'admin'), COALESCE(v_admin_username, 'Admin'),
-    (extract(epoch FROM now()) * 1000)::BIGINT,
+    now(),
     to_char(now(), 'YYYY-MM-DD')
   );
 
@@ -410,7 +409,7 @@ BEGIN
     'UGX',
     'completed',
     'Admin Balance Adjustment (' || p_type || '): ' || COALESCE(p_reason, 'Manual update'),
-    (extract(epoch FROM now()) * 1000)::BIGINT,
+    now(),
     now()
   );
 
@@ -523,7 +522,7 @@ BEGIN
   ) VALUES (
     v_tx_id, v_uid, 'investment', p_amount_ugx, 'UGX', 'completed',
     'Deployed Investment Node: ' || COALESCE(p_title, 'Node'),
-    (extract(epoch FROM now()) * 1000)::BIGINT, now()
+    now(), now()
   );
 
   -- 4. Insert notification

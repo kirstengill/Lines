@@ -39,10 +39,11 @@ export const supabaseAdmin = {
       });
 
       if (!error && data) {
-        const rawTs = Number(data.timestamp) || (data.created_at ? new Date(data.created_at).getTime() : Date.now());
-        const dateStr = data.created_at
-          ? new Date(data.created_at).toLocaleString()
-          : new Date(rawTs).toLocaleString();
+        const dateObj = data.timestamp
+          ? new Date(data.timestamp)
+          : (data.created_at ? new Date(data.created_at) : new Date());
+        const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
+        const isoTs = data.timestamp ? String(data.timestamp) : (data.created_at ? String(data.created_at) : new Date().toISOString());
 
         return {
           success: true,
@@ -54,7 +55,8 @@ export const supabaseAdmin = {
             currency: 'UGX',
             status: data.status || 'pending',
             date: dateStr,
-            timestamp: rawTs,
+            timestamp: isoTs,
+            created_at: data.created_at || isoTs,
             description: data.description || `${data.type.toUpperCase()} Request`,
             paymentMethod: data.payment_method,
             recipientInfo: data.recipient_info,
@@ -62,18 +64,53 @@ export const supabaseAdmin = {
         };
       }
 
-      // Direct insert fallback if RPC not yet created in user's Supabase instance
+      // If the RPC returned a business/validation error, return the actual user error message
+      if (error) {
+        const errMsg = (error.message || '').toLowerCase();
+        const isUserValidationError =
+          errMsg.includes('insufficient balance') ||
+          errMsg.includes('account is blocked') ||
+          errMsg.includes('amount must be') ||
+          errMsg.includes('invalid transaction') ||
+          errMsg.includes('wallet not found');
+
+        if (isUserValidationError) {
+          return { success: false, error: error.message || 'Transaction validation failed' };
+        }
+        console.warn('submit_transaction RPC failed, falling back to direct table submission:', error.message);
+      }
+
+      // Resilient fallback if RPC has a server-side runtime error or is missing
       const { data: authData } = await sb.auth.getUser();
       let userId = authData?.user?.id;
       if (!userId) {
         const localUser = (await import('./supabaseAuth')).authService.getCurrentUser();
         userId = localUser?.id;
       }
-      if (!userId) return { success: false, error: 'Not authenticated' };
+      if (!userId) return { success: false, error: 'Not authenticated. Please log in.' };
+
+      // Check if user is blocked
+      const { data: profileRow } = await sb.from('profiles').select('status').eq('id', userId).maybeSingle();
+      if (profileRow?.status === 'blocked') {
+        return { success: false, error: 'Your account is currently restricted. Please contact administrator.' };
+      }
+
+      // Check balance for withdrawals
+      if (input.type === 'withdraw') {
+        const { data: walletRow } = await sb.from('wallets').select('total_balance_ugx').eq('user_id', userId).maybeSingle();
+        const availableBalance = walletRow ? Number(walletRow.total_balance_ugx) : 0;
+        if (input.amountUGX > availableBalance) {
+          return {
+            success: false,
+            error: `Insufficient balance: requested UGX ${input.amountUGX.toLocaleString()}, available UGX ${availableBalance.toLocaleString()}`,
+          };
+        }
+      }
 
       const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const now = new Date();
-      const insertPayload = {
+      const nowIso = now.toISOString();
+      const insertBase = {
         id: txId,
         user_id: userId,
         type: input.type,
@@ -83,14 +120,51 @@ export const supabaseAdmin = {
         description: input.description || `${input.type.toUpperCase()} Request — UGX ${input.amountUGX.toLocaleString()}`,
         payment_method: input.paymentMethod || null,
         recipient_info: input.recipientInfo || null,
-        timestamp: now.getTime(),
-        created_at: now.toISOString(),
+        created_at: nowIso,
       };
 
-      const { error: insertError } = await sb.from('transactions').insert(insertPayload);
+      // Try inserting with ISO string timestamp (TIMESTAMPTZ)
+      let insertRes = await sb.from('transactions').insert({
+        ...insertBase,
+        timestamp: nowIso,
+      });
 
-      if (insertError) {
-        return { success: false, error: translate(insertError.message) };
+      // If failed due to timestamp column type mismatch (e.g. if column was created as BIGINT), retry
+      if (insertRes.error) {
+        const retryNumeric = await sb.from('transactions').insert({
+          ...insertBase,
+          timestamp: Date.now(),
+        });
+        if (!retryNumeric.error) {
+          insertRes = retryNumeric;
+        } else {
+          // If still failed, try without timestamp column
+          const retryOmitted = await sb.from('transactions').insert(insertBase);
+          if (!retryOmitted.error) {
+            insertRes = retryOmitted;
+          }
+        }
+      }
+
+      if (insertRes.error) {
+        return { success: false, error: translate(insertRes.error.message) };
+      }
+
+      // Insert notification for the user
+      try {
+        await sb.from('notifications').insert({
+          id: `notif_submit_${txId}`,
+          user_id: userId,
+          title: input.type === 'deposit' ? 'Deposit Submitted (Pending)' : 'Withdrawal Submitted (Pending)',
+          message: input.type === 'deposit'
+            ? `Your deposit of UGX ${input.amountUGX.toLocaleString()} is pending approval.`
+            : `Your withdrawal of UGX ${input.amountUGX.toLocaleString()} is pending approval.`,
+          read: false,
+          type: 'info',
+          created_at: nowIso,
+        });
+      } catch {
+        // non-blocking
       }
 
       // Also insert into admin_tasks for visibility in Admin Dashboard
@@ -106,7 +180,7 @@ export const supabaseAdmin = {
           type: input.type,
           status: 'pending',
           amount_ugx: input.amountUGX,
-          created_at: now.toISOString(),
+          created_at: nowIso,
         });
       } catch {
         // non-blocking
@@ -122,8 +196,9 @@ export const supabaseAdmin = {
           currency: 'UGX',
           status: 'pending',
           date: now.toLocaleString(),
-          timestamp: now.getTime(),
-          description: insertPayload.description,
+          timestamp: nowIso,
+          created_at: nowIso,
+          description: insertBase.description,
           paymentMethod: input.paymentMethod,
           recipientInfo: input.recipientInfo,
         },
@@ -565,21 +640,28 @@ export const supabaseAdmin = {
     if (error) return { transactions: [], error: translate(error.message) };
 
     return {
-      transactions: (data || []).map((t: any) => ({
-        id: t.id,
-        userId: t.user_id,
-        username: t.username,
-        userFullName: t.user_full_name,
-        type: t.type,
-        amountUGX: Number(t.amount_ugx),
-        currency: 'UGX' as const,
-        status: t.status as Transaction['status'],
-        date: new Date(t.created_at).toLocaleString(),
-        timestamp: t.created_at ? new Date(t.created_at).getTime() : undefined,
-        description: t.description || '',
-        paymentMethod: t.payment_method || undefined,
-        recipientInfo: t.recipient_info || undefined,
-      })),
+      transactions: (data || []).map((t: any) => {
+        const dateObj = t.timestamp
+          ? new Date(t.timestamp)
+          : (t.created_at ? new Date(t.created_at) : new Date());
+        const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
+        return {
+          id: t.id,
+          userId: t.user_id,
+          username: t.username,
+          userFullName: t.user_full_name,
+          type: t.type,
+          amountUGX: Number(t.amount_ugx),
+          currency: 'UGX' as const,
+          status: t.status as Transaction['status'],
+          date: dateStr,
+          timestamp: t.timestamp ? String(t.timestamp) : (t.created_at ? String(t.created_at) : undefined),
+          created_at: t.created_at || undefined,
+          description: t.description || '',
+          paymentMethod: t.payment_method || undefined,
+          recipientInfo: t.recipient_info || undefined,
+        };
+      }),
     };
   },
 
@@ -593,22 +675,29 @@ export const supabaseAdmin = {
       const { data: rpcData, error: rpcError } = await sb.rpc('admin_all_transactions');
       if (!rpcError && rpcData) {
         return {
-          transactions: rpcData.map((t: any) => ({
-            id: t.id,
-            userId: t.user_id,
-            username: t.username || 'user',
-            userFullName: t.user_full_name,
-            type: t.type,
-            amountUGX: Number(t.amount_ugx),
-            currency: 'UGX' as const,
-            status: (t.status || 'pending') as Transaction['status'],
-            date: new Date(t.created_at || t.timestamp || Date.now()).toLocaleString(),
-            timestamp: Number(t.timestamp) || (t.created_at ? new Date(t.created_at).getTime() : undefined),
-            description: t.description || '',
-            paymentMethod: t.payment_method || undefined,
-            recipientInfo: t.recipient_info || undefined,
-            txHash: t.tx_hash || undefined,
-          })),
+          transactions: rpcData.map((t: any) => {
+            const dateObj = t.timestamp
+              ? new Date(t.timestamp)
+              : (t.created_at ? new Date(t.created_at) : new Date());
+            const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
+            return {
+              id: t.id,
+              userId: t.user_id,
+              username: t.username || 'user',
+              userFullName: t.user_full_name,
+              type: t.type,
+              amountUGX: Number(t.amount_ugx),
+              currency: 'UGX' as const,
+              status: (t.status || 'pending') as Transaction['status'],
+              date: dateStr,
+              timestamp: t.timestamp ? String(t.timestamp) : (t.created_at ? String(t.created_at) : undefined),
+              created_at: t.created_at || undefined,
+              description: t.description || '',
+              paymentMethod: t.payment_method || undefined,
+              recipientInfo: t.recipient_info || undefined,
+              txHash: t.tx_hash || undefined,
+            };
+          }),
         };
       }
 
@@ -636,6 +725,10 @@ export const supabaseAdmin = {
       return {
         transactions: (data || []).map((t: any) => {
           const profile = profileMap.get(t.user_id);
+          const dateObj = t.timestamp
+            ? new Date(t.timestamp)
+            : (t.created_at ? new Date(t.created_at) : new Date());
+          const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
           return {
             id: t.id,
             userId: t.user_id,
@@ -645,8 +738,9 @@ export const supabaseAdmin = {
             amountUGX: Number(t.amount_ugx || t.amount || 0),
             currency: 'UGX' as const,
             status: (t.status || 'pending') as Transaction['status'],
-            date: new Date(t.created_at || t.timestamp || Date.now()).toLocaleString(),
-            timestamp: Number(t.timestamp) || (t.created_at ? new Date(t.created_at).getTime() : undefined),
+            date: dateStr,
+            timestamp: t.timestamp ? String(t.timestamp) : (t.created_at ? String(t.created_at) : undefined),
+            created_at: t.created_at || undefined,
             description: t.description || '',
             paymentMethod: t.payment_method || undefined,
             recipientInfo: t.recipient_info || undefined,
@@ -908,6 +1002,7 @@ export const supabaseAdmin = {
       const adminUsername = authAdmin?.user?.user_metadata?.username || authAdmin?.user?.email?.split('@')[0] || 'Admin';
 
       const now = new Date();
+      const nowIso = now.toISOString();
 
       // Insert into balance_adjustments table
       try {
@@ -923,9 +1018,9 @@ export const supabaseAdmin = {
           reason: adjustment.reason || 'Admin balance adjustment',
           admin_id: adminId,
           admin_username: adminUsername,
-          timestamp: now.getTime(),
-          date: now.toISOString().split('T')[0],
-          created_at: now.toISOString(),
+          timestamp: nowIso,
+          date: nowIso.split('T')[0],
+          created_at: nowIso,
         });
       } catch (e) {
         console.warn('[Supabase Admin] balance_adjustments insert notice:', e);
@@ -941,8 +1036,8 @@ export const supabaseAdmin = {
           currency: 'UGX',
           status: 'completed',
           description: `Admin Balance Adjustment (${adjustment.type === 'add' ? 'Credit' : 'Deduction'}): ${adjustment.reason || 'Manual balance update'}`,
-          timestamp: now.getTime(),
-          created_at: now.toISOString(),
+          timestamp: nowIso,
+          created_at: nowIso,
         });
       } catch (e) {
         console.warn('[Supabase Admin] transactions table notice:', e);
@@ -957,7 +1052,7 @@ export const supabaseAdmin = {
           message: `Your wallet balance was ${adjustment.type === 'add' ? 'credited with UGX ' : 'deducted by UGX '} ${adjustment.amountUGX.toLocaleString()}. New balance: UGX ${newBalance.toLocaleString()}. Reason: ${adjustment.reason}`,
           read: false,
           type: adjustment.type === 'add' ? 'success' : 'info',
-          created_at: now.toISOString(),
+          created_at: nowIso,
         });
       } catch (e) {
         console.warn('[Supabase Admin] notifications insert notice:', e);
@@ -999,8 +1094,9 @@ export const supabaseAdmin = {
         reason: a.reason,
         adminId: a.admin_id,
         adminUsername: a.admin_username,
-        timestamp: Number(a.timestamp) || 0,
-        date: a.date || new Date(a.created_at).toLocaleDateString(),
+        timestamp: a.timestamp ? String(a.timestamp) : (a.created_at ? String(a.created_at) : new Date().toISOString()),
+        date: a.date || (a.created_at ? new Date(a.created_at).toLocaleDateString() : new Date().toLocaleDateString()),
+        created_at: a.created_at || undefined,
       })),
     };
   },

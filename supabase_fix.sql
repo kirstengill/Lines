@@ -88,7 +88,7 @@ BEGIN
                                    description, is_credit, timestamp, created_at)
   VALUES ('tx_welcome_' || new.id::text, new.id, 'bonus', 4000, 'UGX', 'completed',
           'Welcome Signup Bonus — UGX 4,000 credited to your wallet', true,
-          (extract(epoch FROM now()) * 1000)::BIGINT, now())
+          now(), now())
   ON CONFLICT (id) DO NOTHING;
 
   -- Welcome notification (deterministic id = retry-safe)
@@ -173,7 +173,7 @@ BEGIN
                                    description, is_credit, timestamp, created_at)
   VALUES ('tx_ref_' || v_uid::text, v_referrer_id, 'bonus', v_reward, 'UGX', 'completed',
           'Referral bonus: ' || v_referrer_username || ' invited a new partner', true,
-          (extract(epoch FROM now()) * 1000)::BIGINT, now())
+          now(), now())
   ON CONFLICT (id) DO NOTHING;
 
   -- Referrer notification
@@ -232,7 +232,7 @@ BEGIN
   VALUES (v_id, v_uid, p_type, p_amount_ugx, 'UGX', 'pending',
     COALESCE(p_description, p_type || ' Request — UGX ' || p_amount_ugx::text),
     p_payment_method, p_recipient_info,
-    (extract(epoch FROM now()) * 1000)::BIGINT, now())
+    now(), now())
   RETURNING * INTO v_res;
 
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
@@ -492,7 +492,7 @@ BEGIN
     admin_id, admin_username, timestamp, date)
   VALUES (v_adj_id, p_user_id, v_user_username, v_user_full_name, v_prev, p_amount, v_new,
     p_type, COALESCE(p_reason,'Admin Adjustment'), COALESCE(auth.uid()::text,'admin'),
-    COALESCE(v_admin_username,'Admin'), (extract(epoch FROM now())*1000)::BIGINT,
+    COALESCE(v_admin_username,'Admin'), now(),
     to_char(now(),'YYYY-MM-DD'));
 
   v_tx_id := 'tx_' || lower(substring(replace(gen_random_uuid()::text,'-','') from 1 for 18));
@@ -500,7 +500,7 @@ BEGIN
     description, is_credit, timestamp, created_at)
   VALUES (v_tx_id, p_user_id, 'adjustment', p_amount, 'UGX', 'completed',
     'Admin Balance Adjustment (' || p_type || '): ' || COALESCE(p_reason,'Manual update'),
-    p_type='add', (extract(epoch FROM now())*1000)::BIGINT, now());
+    p_type='add', now(), now());
 
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
   VALUES ('notif_' || lower(substring(replace(gen_random_uuid()::text,'-','') from 1 for 18)),
@@ -575,7 +575,7 @@ BEGIN
     description, is_credit, timestamp, created_at)
   VALUES (v_tx_id, v_uid, 'investment', p_amount_ugx, 'UGX', 'completed',
     'Deployed Investment Node: ' || COALESCE(NULLIF(p_title,''), v_catalog.title), false,
-    (extract(epoch FROM now())*1000)::BIGINT, now());
+    now(), now());
 
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
   VALUES ('notif_' || lower(substring(replace(gen_random_uuid()::text,'-','') from 1 for 18)),
@@ -631,7 +631,7 @@ BEGIN
     description, is_credit, timestamp, created_at)
   VALUES (v_tx_id, v_uid, 'reward', v_unclaimed, 'UGX', 'completed',
     'Reward claimed: ' || v_machine.title, true,
-    (extract(epoch FROM now())*1000)::BIGINT, now());
+    now(), now());
 
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
   VALUES ('notif_' || lower(substring(replace(gen_random_uuid()::text,'-','') from 1 for 18)),
@@ -780,7 +780,7 @@ BEGIN
                                        description, is_credit, timestamp, created_at)
       VALUES ('tx_welcome_' || r.id::text, r.id, 'bonus', 4000, 'UGX', 'completed',
               'Welcome Signup Bonus — UGX 4,000 credited to your wallet', true,
-              (extract(epoch FROM now())*1000)::BIGINT, now())
+              now(), now())
       ON CONFLICT (id) DO NOTHING;
 
       INSERT INTO public.notifications (id, user_id, title, message, read, type)

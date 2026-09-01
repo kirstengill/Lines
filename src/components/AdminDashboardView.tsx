@@ -671,8 +671,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
     if (txSortBy === 'highest_amount') return b.amountUGX - a.amountUGX;
     if (txSortBy === 'lowest_amount') return a.amountUGX - b.amountUGX;
-    const timeA = a.timestamp || (a.date ? new Date(a.date).getTime() : 0);
-    const timeB = b.timestamp || (b.date ? new Date(b.date).getTime() : 0);
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : (a.created_at ? new Date(a.created_at).getTime() : (a.date ? new Date(a.date).getTime() : 0));
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : (b.created_at ? new Date(b.created_at).getTime() : (b.date ? new Date(b.date).getTime() : 0));
     if (txSortBy === 'oldest') return timeA - timeB;
     return timeB - timeA; // newest default
   });

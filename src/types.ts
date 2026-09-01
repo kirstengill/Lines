@@ -56,7 +56,8 @@ export interface Transaction {
   amountUGX: number;
   currency: 'UGX';
   date: string;
-  timestamp?: number;
+  timestamp?: string | number;
+  created_at?: string;
   status: 'completed' | 'pending' | 'approved' | 'rejected';
   description: string;
   paymentMethod?: string;
@@ -111,7 +112,8 @@ export interface BalanceAdjustment {
   reason: string;
   adminId: string;
   adminUsername: string;
-  timestamp: number;
+  timestamp: string | number;
+  created_at?: string;
   date: string;
 }
 

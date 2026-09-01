@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { WHATSAPP_HELP_URL } from '../constants/links';
+import { authService } from '../services/supabaseAuth';
 
 // Withdrawal rules
 const MIN_WITHDRAWAL_UGX = 4000;
@@ -29,7 +30,13 @@ interface DepositWithdrawModalProps {
   mode: 'deposit' | 'withdraw';
   onClose: () => void;
   balanceUGX: number;
-  onSuccess: (amountUGX: number, type: 'deposit' | 'withdraw', description: string, paymentMethod?: string, recipientInfo?: string) => void;
+  onSuccess: (
+    amountUGX: number,
+    type: 'deposit' | 'withdraw',
+    description: string,
+    paymentMethod?: string,
+    recipientInfo?: string
+  ) => Promise<{ success: boolean; error?: string } | void> | void;
 }
 
 export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
@@ -38,13 +45,30 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   balanceUGX,
   onSuccess,
 }) => {
+  const currentUser = authService.getCurrentUser();
   const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
-  const [amountUGXStr, setAmountUGXStr] = useState<string>('50000');
-  const [depositorPhone, setDepositorPhone] = useState<string>('');
-  const [recipient, setRecipient] = useState<string>('0772 123 456 (MTN MoMo)');
+  const [amountUGXStr, setAmountUGXStr] = useState<string>(() => {
+    if (mode === 'withdraw') {
+      if (balanceUGX >= MIN_WITHDRAWAL_UGX) {
+        return Math.min(balanceUGX, 50000).toString();
+      }
+      return MIN_WITHDRAWAL_UGX.toString();
+    }
+    return '50000';
+  });
+  const [depositorPhone, setDepositorPhone] = useState<string>(() => currentUser?.phone || '');
+  const [recipient, setRecipient] = useState<string>(() => currentUser?.phone ? `${currentUser.phone} (${currentUser.username || 'Wallet'})` : '0772 123 456 (MTN MoMo)');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [successInfo, setSuccessInfo] = useState<{
+    amount: number;
+    fee: number;
+    netAmount: number;
+    channel: string;
+    recipient: string;
+  } | null>(null);
 
   const numUGX = parseFloat(amountUGXStr) || 0;
 
@@ -63,7 +87,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleAction = () => {
+  const handleAction = async () => {
     setErrorMessage('');
     if (numUGX <= 0) {
       setErrorMessage('Please enter a valid amount in UGX.');
@@ -78,22 +102,20 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       }
     }
 
-    // REQUIREMENT 6: Minimum withdrawal amount
+    // Minimum withdrawal amount
     if (mode === 'withdraw' && numUGX < MIN_WITHDRAWAL_UGX) {
       setErrorMessage(`Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`);
       return;
     }
 
-    // REQUIREMENT 6: Insufficient Withdrawal Balance validation (total incl. 15% fee)
+    // Insufficient Withdrawal Balance validation
     if (mode === 'withdraw' && numUGX > balanceUGX) {
       setErrorMessage(`Insufficient Balance: Requested withdrawal amount of UGX ${numUGX.toLocaleString()} exceeds your available balance of UGX ${balanceUGX.toLocaleString()}.`);
       return;
     }
 
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      confetti({ particleCount: 50, spread: 45 });
+    try {
       const channelName =
         activeTab === 'mtn'
           ? 'MTN Mobile Money'
@@ -105,16 +127,34 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       const desc =
         mode === 'deposit'
           ? `Deposit UGX ${numUGX.toLocaleString()} (Sender: ${cleanSender})`
-          : `Payout Request to ${recipient}`;
+          : `Withdrawal of UGX ${numUGX.toLocaleString()} (Net Payout: UGX ${netWithdrawalUGX.toLocaleString()} via ${channelName})`;
 
       const referenceInfo =
         mode === 'deposit'
           ? `Sender: ${cleanSender} → To: ${RECIPIENT_NAME} (${DEPOSIT_PHONE})`
           : recipient;
 
-      onSuccess(netWithdrawalUGX, mode, desc, channelName, referenceInfo);
-      onClose();
-    }, 600);
+      const res = await onSuccess(numUGX, mode, desc, channelName, referenceInfo);
+      setIsProcessing(false);
+
+      if (res && res.success === false) {
+        setErrorMessage(res.error || 'Transaction submission failed.');
+        return;
+      }
+
+      confetti({ particleCount: 50, spread: 45 });
+      setSuccessInfo({
+        amount: numUGX,
+        fee: withdrawalFeeUGX,
+        netAmount: netWithdrawalUGX,
+        channel: channelName,
+        recipient: referenceInfo,
+      });
+      setSubmittedSuccess(true);
+    } catch (err: any) {
+      setIsProcessing(false);
+      setErrorMessage(err?.message || 'Transaction submission failed.');
+    }
   };
 
   return (
@@ -147,6 +187,78 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
         </div>
 
         {/* Content */}
+        {submittedSuccess && successInfo ? (
+          <div className="p-6 space-y-5 text-center">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-sm">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+
+            <div>
+              <h4 className="text-[18px] font-extrabold text-slate-900">
+                {mode === 'withdraw'
+                  ? 'Withdrawal request submitted successfully.'
+                  : 'Deposit request submitted successfully.'}
+              </h4>
+              <p className="text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl py-2 px-3 mt-2">
+                {mode === 'withdraw'
+                  ? 'Your withdrawal is pending admin approval.'
+                  : 'Your deposit is pending administrator review and verification.'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left space-y-2.5 text-[12.5px]">
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Transaction Type</span>
+                <span className="font-bold text-slate-900 capitalize">{mode}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Requested Amount</span>
+                <span className="font-bold text-slate-900">UGX {successInfo.amount.toLocaleString()}</span>
+              </div>
+              {mode === 'withdraw' && (
+                <>
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>15% Processing Fee</span>
+                    <span className="font-semibold text-rose-600">- UGX {successInfo.fee.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-900 font-bold border-t border-slate-200/60 pt-2">
+                    <span>Net Payout Amount</span>
+                    <span className="text-emerald-600 font-mono text-[14px]">UGX {successInfo.netAmount.toLocaleString()}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Payment Channel</span>
+                <span className="font-semibold text-slate-800">{successInfo.channel}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Destination</span>
+                <span className="font-mono text-[11.5px] text-slate-800 truncate max-w-[200px]">{successInfo.recipient}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600 border-t border-slate-200/60 pt-2">
+                <span>Status</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  Pending Admin Approval
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              {mode === 'withdraw'
+                ? 'Your request has been securely recorded. Your wallet balance will update once the administrator approves and releases the payout.'
+                : 'Your payment reference has been recorded. Once our team confirms the receipt, your wallet will be credited immediately.'}
+            </p>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-3 rounded-xl font-bold text-[14px] text-white bg-slate-900 hover:bg-slate-800 shadow-md active:scale-98 transition-all cursor-pointer"
+            >
+              Done & View Activity
+            </button>
+          </div>
+        ) : (
         <div className="p-5 space-y-4">
           {/* Method Selector */}
           <div>
@@ -241,17 +353,29 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
             )}
 
             {/* Quick preset buttons */}
-            <div className="flex gap-2 mt-2">
-              {[15000, 20000, 30000, 50000, 100000].map((preset) => (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {(mode === 'withdraw'
+                ? [4000, 10000, 20000, 50000, 100000]
+                : [15000, 20000, 30000, 50000, 100000]
+              ).map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setAmountUGXStr(preset.toString())}
-                  className="flex-1 py-1 text-[10.5px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                  className="flex-1 min-w-[50px] py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
                 >
-                  +{preset >= 1000000 ? `${preset / 1000000}M` : `${preset / 1000}k`}
+                  {preset >= 1000000 ? `${preset / 1000000}M` : `${preset / 1000}k`}
                 </button>
               ))}
+              {mode === 'withdraw' && balanceUGX > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAmountUGXStr(balanceUGX.toString())}
+                  className="px-2.5 py-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors cursor-pointer border border-blue-200"
+                >
+                  Max Balance
+                </button>
+              )}
             </div>
           </div>
 
@@ -504,6 +628,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
             </a>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
