@@ -22,6 +22,16 @@ import { authService } from '../services/supabaseAuth';
 const MIN_WITHDRAWAL_UGX = 4000;
 const WITHDRAWAL_FEE_RATE = 0.15; // 15% transaction fee
 
+// Helper to calculate maximum receive amount after 15% fee from a given balance
+export const calculateMaxWithdrawal = (balance: number): number => {
+  if (balance <= 0) return 0;
+  let max = Math.floor(balance / (1 + WITHDRAWAL_FEE_RATE));
+  while (max > 0 && max + Math.round(max * WITHDRAWAL_FEE_RATE) > balance) {
+    max--;
+  }
+  return max;
+};
+
 // Deposit receiving line details
 const DEPOSIT_PHONE = '0766495353';
 const RECIPIENT_NAME = 'ELIX OWOMUZINYA';
@@ -49,8 +59,9 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
   const [amountUGXStr, setAmountUGXStr] = useState<string>(() => {
     if (mode === 'withdraw') {
-      if (balanceUGX >= MIN_WITHDRAWAL_UGX) {
-        return Math.min(balanceUGX, 50000).toString();
+      const maxPossible = calculateMaxWithdrawal(balanceUGX);
+      if (maxPossible >= MIN_WITHDRAWAL_UGX) {
+        return Math.min(maxPossible, 50000).toString();
       }
       return MIN_WITHDRAWAL_UGX.toString();
     }
@@ -65,6 +76,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   const [successInfo, setSuccessInfo] = useState<{
     amount: number;
     fee: number;
+    totalDeduction: number;
     netAmount: number;
     channel: string;
     recipient: string;
@@ -72,9 +84,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
   const numUGX = parseFloat(amountUGXStr) || 0;
 
-  // Withdrawal fee breakdown: 15% is deducted from the requested amount.
-  const withdrawalFeeUGX = mode === 'withdraw' ? Math.round(numUGX * WITHDRAWAL_FEE_RATE) : 0;
-  const netWithdrawalUGX = mode === 'withdraw' ? numUGX - withdrawalFeeUGX : numUGX;
+  // Withdrawal fee calculations matching backend 15% logic:
+  // 1. Amount entered by user is the exact amount they want to receive
+  // 2. Transaction fee is 15% of requested withdrawal amount
+  // 3. Total wallet deduction = requested amount + 15% fee
+  const requestedWithdrawalUGX = mode === 'withdraw' ? numUGX : 0;
+  const withdrawalFeeUGX = mode === 'withdraw' ? Math.round(requestedWithdrawalUGX * WITHDRAWAL_FEE_RATE) : 0;
+  const totalDeductionUGX = mode === 'withdraw' ? requestedWithdrawalUGX + withdrawalFeeUGX : numUGX;
+  const youReceiveUGX = requestedWithdrawalUGX;
 
   const depositUssd =
     activeTab === 'airtel'
@@ -103,15 +120,17 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
     }
 
     // Minimum withdrawal amount
-    if (mode === 'withdraw' && numUGX < MIN_WITHDRAWAL_UGX) {
-      setErrorMessage(`Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`);
-      return;
-    }
+    if (mode === 'withdraw') {
+      if (requestedWithdrawalUGX < MIN_WITHDRAWAL_UGX) {
+        setErrorMessage(`Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`);
+        return;
+      }
 
-    // Insufficient Withdrawal Balance validation
-    if (mode === 'withdraw' && numUGX > balanceUGX) {
-      setErrorMessage(`Insufficient Balance: Requested withdrawal amount of UGX ${numUGX.toLocaleString()} exceeds your available balance of UGX ${balanceUGX.toLocaleString()}.`);
-      return;
+      // Insufficient balance validation: compare total deduction (requested + 15% fee) against available balance
+      if (totalDeductionUGX > balanceUGX) {
+        setErrorMessage(`Insufficient balance. You need UGX ${totalDeductionUGX.toLocaleString()} including the 15% transaction fee.`);
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -127,14 +146,16 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       const desc =
         mode === 'deposit'
           ? `Deposit UGX ${numUGX.toLocaleString()} (Sender: ${cleanSender})`
-          : `Withdrawal of UGX ${numUGX.toLocaleString()} (Net Payout: UGX ${netWithdrawalUGX.toLocaleString()} via ${channelName})`;
+          : `Withdrawal of UGX ${requestedWithdrawalUGX.toLocaleString()} (Receive: UGX ${requestedWithdrawalUGX.toLocaleString()} | Fee: UGX ${withdrawalFeeUGX.toLocaleString()} | Total Deduction: UGX ${totalDeductionUGX.toLocaleString()})`;
 
       const referenceInfo =
         mode === 'deposit'
           ? `Sender: ${cleanSender} → To: ${RECIPIENT_NAME} (${DEPOSIT_PHONE})`
           : recipient;
 
-      const res = await onSuccess(numUGX, mode, desc, channelName, referenceInfo);
+      // Pass total deduction as the amount to be verified and deducted from wallet
+      const submissionAmount = mode === 'withdraw' ? totalDeductionUGX : numUGX;
+      const res = await onSuccess(submissionAmount, mode, desc, channelName, referenceInfo);
       setIsProcessing(false);
 
       if (res && res.success === false) {
@@ -144,9 +165,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
       confetti({ particleCount: 50, spread: 45 });
       setSuccessInfo({
-        amount: numUGX,
+        amount: mode === 'withdraw' ? requestedWithdrawalUGX : numUGX,
         fee: withdrawalFeeUGX,
-        netAmount: netWithdrawalUGX,
+        totalDeduction: totalDeductionUGX,
+        netAmount: mode === 'withdraw' ? requestedWithdrawalUGX : numUGX,
         channel: channelName,
         recipient: referenceInfo,
       });
@@ -211,21 +233,30 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 <span>Transaction Type</span>
                 <span className="font-bold text-slate-900 capitalize">{mode}</span>
               </div>
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Requested Amount</span>
-                <span className="font-bold text-slate-900">UGX {successInfo.amount.toLocaleString()}</span>
-              </div>
-              {mode === 'withdraw' && (
+              {mode === 'withdraw' ? (
                 <>
-                  <div className="flex justify-between items-center text-slate-500">
-                    <span>15% Processing Fee</span>
-                    <span className="font-semibold text-rose-600">- UGX {successInfo.fee.toLocaleString()}</span>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Withdrawal Amount</span>
+                    <span className="font-bold text-slate-900 font-mono">UGX {successInfo.amount.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-900 font-bold border-t border-slate-200/60 pt-2">
-                    <span>Net Payout Amount</span>
-                    <span className="text-emerald-600 font-mono text-[14px]">UGX {successInfo.netAmount.toLocaleString()}</span>
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Transaction Fee (15%)</span>
+                    <span className="font-semibold text-amber-600 font-mono">+ UGX {successInfo.fee.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-700 font-bold border-t border-slate-200/60 pt-1.5">
+                    <span>Total Wallet Deduction</span>
+                    <span className="text-rose-600 font-mono">UGX {successInfo.totalDeduction.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-900 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 mt-1">
+                    <span className="text-emerald-900">You Receive</span>
+                    <span className="text-emerald-700 font-mono text-[14px]">UGX {successInfo.netAmount.toLocaleString()}</span>
                   </div>
                 </>
+              ) : (
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Deposit Amount</span>
+                  <span className="font-bold text-slate-900 font-mono">UGX {successInfo.amount.toLocaleString()}</span>
+                </div>
               )}
               <div className="flex justify-between items-center text-slate-600">
                 <span>Payment Channel</span>
@@ -246,7 +277,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
             <p className="text-[11px] text-slate-500 leading-relaxed">
               {mode === 'withdraw'
-                ? 'Your request has been securely recorded. Your wallet balance will update once the administrator approves and releases the payout.'
+                ? 'Your withdrawal request has been submitted. The total deduction includes the 15% transaction fee and will be deducted once approved.'
                 : 'Your payment reference has been recorded. Once our team confirms the receipt, your wallet will be credited immediately.'}
             </p>
 
@@ -318,7 +349,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           {/* Amount Inputs */}
           <div>
             <label className="text-[12px] font-semibold text-slate-600 mb-1.5 flex items-center justify-between">
-              <span>Amount (UGX)</span>
+              <span>
+                {mode === 'deposit' ? 'Amount (UGX)' : 'Withdrawal Amount (You Receive)'}
+                {mode === 'withdraw' && (
+                  <span className="ml-1.5 text-[10.5px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    Min: UGX 4,000
+                  </span>
+                )}
+              </span>
               <span className="text-[11px] font-medium text-emerald-600 font-mono">
                 UGX {numUGX.toLocaleString()}
               </span>
@@ -329,26 +367,38 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 type="number"
                 value={amountUGXStr}
                 onChange={(e) => setAmountUGXStr(e.target.value)}
-                placeholder="50000"
+                placeholder={mode === 'deposit' ? '50000' : '4000'}
                 className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 font-mono"
               />
             </div>
 
-            {/* Withdrawal fee breakdown */}
-            {mode === 'withdraw' && numUGX > 0 && (
-              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1">
-                <div className="flex items-center justify-between text-[11.5px]">
+            {/* Withdrawal fee breakdown preview */}
+            {mode === 'withdraw' && requestedWithdrawalUGX > 0 && (
+              <div className="mt-2.5 bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-[12.5px]">
                   <span className="text-slate-600 font-medium">Withdrawal Amount</span>
-                  <span className="font-mono font-bold text-slate-800">UGX {numUGX.toLocaleString()}</span>
+                  <span className="font-mono font-bold text-slate-800">UGX {requestedWithdrawalUGX.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center justify-between text-[11.5px]">
+                <div className="flex items-center justify-between text-[12.5px]">
                   <span className="text-slate-600 font-medium">Transaction Fee (15%)</span>
-                  <span className="font-mono font-bold text-red-600">- UGX {withdrawalFeeUGX.toLocaleString()}</span>
+                  <span className="font-mono font-bold text-amber-600">+ UGX {withdrawalFeeUGX.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center justify-between text-[12px] border-t border-slate-200 pt-1">
-                  <span className="text-slate-700 font-bold">You Receive</span>
-                  <span className="font-mono font-bold text-emerald-600">UGX {netWithdrawalUGX.toLocaleString()}</span>
+                <div className="flex items-center justify-between text-[12.5px] border-t border-slate-200/80 pt-1.5">
+                  <span className="text-slate-700 font-bold">Total Wallet Deduction</span>
+                  <span className="font-mono font-bold text-rose-600">UGX {totalDeductionUGX.toLocaleString()}</span>
                 </div>
+                <div className="flex items-center justify-between text-[13px] bg-emerald-50 border border-emerald-200/80 rounded-xl px-3 py-2 mt-1">
+                  <span className="text-emerald-900 font-bold">You Receive</span>
+                  <span className="font-mono font-black text-emerald-700 text-[14px]">UGX {youReceiveUGX.toLocaleString()}</span>
+                </div>
+                {totalDeductionUGX > balanceUGX && (
+                  <div className="text-[11px] font-semibold text-rose-600 flex items-center gap-1.5 pt-1 border-t border-rose-100">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                    <span>
+                      Insufficient balance. You need UGX {totalDeductionUGX.toLocaleString()} including the 15% transaction fee.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -370,10 +420,14 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               {mode === 'withdraw' && balanceUGX > 0 && (
                 <button
                   type="button"
-                  onClick={() => setAmountUGXStr(balanceUGX.toString())}
+                  onClick={() => {
+                    const maxRec = calculateMaxWithdrawal(balanceUGX);
+                    setAmountUGXStr(maxRec.toString());
+                  }}
                   className="px-2.5 py-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors cursor-pointer border border-blue-200"
+                  title="Select maximum amount you can receive after 15% fee"
                 >
-                  Max Balance
+                  Max Balance ({calculateMaxWithdrawal(balanceUGX).toLocaleString()} UGX)
                 </button>
               )}
             </div>
@@ -587,7 +641,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 flex items-start gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-amber-800 leading-snug">
-                  <span className="font-bold">Approval Process:</span> A <span className="font-semibold underline">15% transaction fee</span> is deducted from every withdrawal. Requests are placed in <span className="font-semibold underline">Pending</span> status and deducted/dispatched to your account upon administrator authorization.
+                  <span className="font-bold">Fee & Approval Process:</span> A <span className="font-semibold underline">15% transaction fee</span> is added to your withdrawal amount. The total wallet deduction will be processed upon administrator review and approval.
                 </p>
               </div>
             </div>
@@ -610,7 +664,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               ? 'Processing Transaction...'
               : mode === 'deposit'
                 ? `Confirm Deposit of UGX ${numUGX.toLocaleString()}`
-                : `Submit Withdrawal of UGX ${netWithdrawalUGX.toLocaleString()}`}
+                : `Submit Withdrawal of UGX ${requestedWithdrawalUGX.toLocaleString()}`}
           </button>
 
           {/* Quick WhatsApp Help */}

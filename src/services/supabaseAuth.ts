@@ -661,11 +661,16 @@ class AuthService {
     return res;
   }
 
-  public async submitWithdrawal(amountUGX: number, paymentMethod: string, recipientInfo: string) {
+  public async submitWithdrawal(
+    amountUGX: number,
+    paymentMethod: string,
+    recipientInfo: string,
+    description?: string
+  ) {
     const res = await supabaseAdmin.submitTransaction({
       type: 'withdraw',
       amountUGX,
-      description: `Withdrawal — UGX ${amountUGX.toLocaleString()} — Pending`,
+      description: description || `Withdrawal — UGX ${amountUGX.toLocaleString()} — Pending`,
       paymentMethod,
       recipientInfo,
     });

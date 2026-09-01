@@ -296,7 +296,8 @@ export default function App() {
         res = await authService.submitWithdrawal(
           amountUGX,
           paymentMethod || 'MTN Mobile Money',
-          recipientInfo || 'Mobile Wallet'
+          recipientInfo || 'Mobile Wallet',
+          description
         );
       }
       if (!res.success) {

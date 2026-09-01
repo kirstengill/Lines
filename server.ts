@@ -864,6 +864,13 @@ app.post('/api/wallet/withdraw', requireAuth, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Please enter a valid withdrawal amount in UGX.' });
   }
 
+  const MIN_WITHDRAWAL_UGX = 4000;
+  if (numAmount < MIN_WITHDRAWAL_UGX) {
+    return res.status(400).json({
+      error: `Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`,
+    });
+  }
+
   // Validate sufficient available balance
   const currentBalance = record.data.wallet.totalBalanceUGX || 0;
   if (numAmount > currentBalance) {

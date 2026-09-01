@@ -95,8 +95,16 @@ export const supabaseAdmin = {
         return { success: false, error: 'Your account is currently restricted. Please contact administrator.' };
       }
 
-      // Check balance for withdrawals
+      // Check balance and minimum for withdrawals
       if (input.type === 'withdraw') {
+        const MIN_WITHDRAWAL_UGX = 4000;
+        if (input.amountUGX < MIN_WITHDRAWAL_UGX) {
+          return {
+            success: false,
+            error: `Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`,
+          };
+        }
+
         const { data: walletRow } = await sb.from('wallets').select('total_balance_ugx').eq('user_id', userId).maybeSingle();
         const availableBalance = walletRow ? Number(walletRow.total_balance_ugx) : 0;
         if (input.amountUGX > availableBalance) {
