@@ -1,6 +1,7 @@
 import React from 'react';
-import { Bell, User, LogIn } from 'lucide-react';
+import { Bell, LogIn, MessageCircle } from 'lucide-react';
 import { AppNotification, UserProfile } from '../types';
+import { WHATSAPP_HELP_URL } from '../constants/links';
 
 interface TopHeaderProps {
   notifications: AppNotification[];
@@ -49,10 +50,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
       {/* Action Icons */}
       <div className="flex items-center gap-1.5">
+        {/* WhatsApp Help Option */}
+        <a
+          id="btn-whatsapp-header"
+          href={WHATSAPP_HELP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 transition-all text-[11px] font-bold shadow-2xs active:scale-95"
+          title="Direct WhatsApp Help & Support"
+        >
+          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
+          <span className="hidden sm:inline">WhatsApp</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        </a>
+
         {onOpenAuth && (
           <button
             onClick={onOpenAuth}
-            className="p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors flex items-center justify-center"
+            className="p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors flex items-center justify-center cursor-pointer"
             title={user ? `Signed in as ${user.fullName}` : 'Sign In / Register'}
           >
             {user ? (
@@ -69,7 +84,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           id="btn-notifications"
           onClick={onOpenNotifications}
           aria-label="View notifications"
-          className="relative p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors"
+          className="relative p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors cursor-pointer"
         >
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (

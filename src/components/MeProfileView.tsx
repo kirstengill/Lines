@@ -1,5 +1,6 @@
 import React from 'react';
 import { UserProfile } from '../types';
+import { WHATSAPP_HELP_URL } from '../constants/links';
 import {
   ShieldCheck,
   LogOut,
@@ -9,7 +10,9 @@ import {
   Users,
   Lock,
   Globe,
-  FileText
+  FileText,
+  MessageCircle,
+  ExternalLink
 } from 'lucide-react';
 
 interface MeProfileViewProps {
@@ -155,6 +158,32 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
         )}
+
+        <a
+          id="btn-whatsapp-profile-option"
+          href={WHATSAPP_HELP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-emerald-50/50 transition-colors cursor-pointer text-left group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-[#25D366] flex items-center justify-center">
+              <MessageCircle className="w-4 h-4 fill-emerald-600/20" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-bold text-slate-900 block">
+                  Official WhatsApp Helpdesk
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                  Live
+                </span>
+              </div>
+              <span className="text-[11px] text-emerald-700 font-medium">Direct support, verification & community</span>
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+        </a>
 
         <button
           onClick={onOpenSupport}

@@ -10,9 +10,12 @@ import {
   ShieldAlert,
   UserCheck,
   PhoneCall,
-  CheckCircle2
+  CheckCircle2,
+  MessageCircle,
+  ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { WHATSAPP_HELP_URL } from '../constants/links';
 
 // Withdrawal rules
 const MIN_WITHDRAWAL_UGX = 4000;
@@ -485,6 +488,21 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 ? `Confirm Deposit of UGX ${numUGX.toLocaleString()}`
                 : `Submit Withdrawal of UGX ${netWithdrawalUGX.toLocaleString()}`}
           </button>
+
+          {/* Quick WhatsApp Help */}
+          <div className="text-center pt-1">
+            <a
+              id="link-deposit-whatsapp-help"
+              href={WHATSAPP_HELP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
+              <span>Need help with {mode === 'deposit' ? 'depositing' : 'withdrawing'}? Chat on WhatsApp</span>
+              <ExternalLink className="w-3 h-3 text-emerald-500" />
+            </a>
+          </div>
         </div>
       </div>
     </div>

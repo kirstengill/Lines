@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
+import { X, Send, Bot, User, Sparkles, HelpCircle, MessageCircle, ExternalLink } from 'lucide-react';
 import { ChatMessage } from '../types';
+import { WHATSAPP_HELP_URL } from '../constants/links';
 
 interface SupportChatModalProps {
   onClose: () => void;
@@ -11,7 +12,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     {
       id: 'm1',
       sender: 'support',
-      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353 - ELIX OWOMUZINYA), withdrawals, or referral earnings today?',
+      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353 - ELIX OWOMUZINYA), withdrawals, referral earnings, or WhatsApp support today?',
       timestamp: 'Just now',
     },
   ]);
@@ -19,6 +20,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
   const [isTyping, setIsTyping] = useState(false);
 
   const quickQuestions = [
+    'Chat with WhatsApp Helpdesk',
     'What are the investment plans & daily earnings?',
     'How do I deposit via USSD (0766495353 - ELIX OWOMUZINYA)?',
     'What is the minimum withdrawal & 15% fee?',
@@ -42,11 +44,16 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     setIsTyping(true);
 
     setTimeout(() => {
-      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 4,000), or earning 15% referral commissions.";
+      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 4,000), or join our official WhatsApp Helpdesk & Community.";
 
       const lower = text.toLowerCase();
 
-      if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price')) {
+      if (lower.includes('whatsapp') || lower.includes('chat') || lower.includes('human') || lower.includes('agent') || lower.includes('desk') || lower.includes('group')) {
+        reply = "You can contact our live support desk and community on WhatsApp anytime!\n\n" +
+          "Official WhatsApp Help & Community Link:\n" +
+          WHATSAPP_HELP_URL + "\n\n" +
+          "Tap the 'Join WhatsApp Helpdesk' banner at the top of this modal to open WhatsApp directly.";
+      } else if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price')) {
         reply = "Here is our current SolNova Solar Mining catalog:\n\n" +
           "• Starter Plan: UGX 15,000 → UGX 3,500/day\n" +
           "• Solar-Mech 10: UGX 20,000 → UGX 4,300/day\n" +
@@ -106,7 +113,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl w-full max-w-md h-[550px] shadow-2xl border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl w-full max-w-md h-[560px] shadow-2xl border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-[#1657D9] text-white rounded-t-3xl">
           <div className="flex items-center gap-2.5">
@@ -119,16 +126,41 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
               </h3>
               <p className="text-[11px] text-blue-100 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                24/7 AI Concierge Online
+                24/7 AI & WhatsApp Concierge
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-white/20 transition-colors"
+            className="p-1 rounded-full hover:bg-white/20 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5 text-white" />
           </button>
+        </div>
+
+        {/* Direct WhatsApp Callout Banner */}
+        <div className="bg-emerald-50 px-4 py-2.5 border-b border-emerald-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <MessageCircle className="w-4 h-4 fill-white/20" />
+            </div>
+            <div>
+              <span className="text-[12px] font-extrabold text-emerald-900 block leading-tight">
+                WhatsApp Support & Community
+              </span>
+              <span className="text-[10px] text-emerald-700">Instant direct assistance</span>
+            </div>
+          </div>
+          <a
+            id="btn-whatsapp-chat-modal"
+            href={WHATSAPP_HELP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 bg-[#25D366] hover:bg-[#20bd5a] text-white text-[11px] font-bold rounded-lg shadow-2xs flex items-center gap-1 active:scale-95 transition-all"
+          >
+            <span>Open</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
 
         {/* Message stream */}
@@ -176,7 +208,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
             <button
               key={idx}
               onClick={() => handleSend(q)}
-              className="text-[11px] whitespace-nowrap bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50 px-2.5 py-1 rounded-full shrink-0 transition-colors"
+              className="text-[11px] whitespace-nowrap bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50 px-2.5 py-1 rounded-full shrink-0 transition-colors cursor-pointer"
             >
               {q}
             </button>
