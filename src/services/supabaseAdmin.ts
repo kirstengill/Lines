@@ -327,25 +327,35 @@ export const supabaseAdmin = {
         return { machines: AVAILABLE_CATALOG };
       }
 
-      const mappedMachines: Machine[] = data.map((m: any) => ({
-        id: m.id,
-        title: m.title,
-        subtitle: m.subtitle || undefined,
-        category: m.category || 'DS-Mining',
-        image: m.image,
-        dailyRewardUGX: Number(m.daily_reward_ugx || m.dailyRewardUGX || 0),
-        status: (m.status || 'Active') as Machine['status'],
-        estYearlyROI: Number(m.est_yearly_roi || m.estYearlyROI || 0),
-        minInvestUGX: Number(m.min_invest_ugx || m.minInvestUGX || 0),
-        hashrate: m.hashrate || '10.0 TH/s',
-        powerSource: m.power_source || m.powerSource || 'Clean Energy Array',
-        uptime: m.uptime || '99.9%',
-        temperature: m.temperature || '36.0°C',
-        efficiency: Number(m.efficiency || 98.5),
-        totalMinedUGX: Number(m.total_mined_ugx || m.totalMinedUGX || 0),
-        unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || m.unclaimedRewardsUGX || 0),
-        isBoosted: Boolean(m.is_boosted || m.isBoosted),
-      }));
+      const mappedMachines: Machine[] = data.map((m: any) => {
+        let resolvedImage = m.image;
+        if (!resolvedImage || (!resolvedImage.startsWith('http://') && !resolvedImage.startsWith('https://') && !resolvedImage.startsWith('data:'))) {
+          const defaultMatch = AVAILABLE_CATALOG.find((c) => c.id === m.id);
+          if (defaultMatch && defaultMatch.image) {
+            resolvedImage = defaultMatch.image;
+          }
+        }
+
+        return {
+          id: m.id,
+          title: m.title,
+          subtitle: m.subtitle || undefined,
+          category: m.category || 'DS-Mining',
+          image: resolvedImage || m.image || '',
+          dailyRewardUGX: Number(m.daily_reward_ugx || m.dailyRewardUGX || 0),
+          status: (m.status || 'Active') as Machine['status'],
+          estYearlyROI: Number(m.est_yearly_roi || m.estYearlyROI || 0),
+          minInvestUGX: Number(m.min_invest_ugx || m.minInvestUGX || 0),
+          hashrate: m.hashrate || '10.0 TH/s',
+          powerSource: m.power_source || m.powerSource || 'Clean Energy Array',
+          uptime: m.uptime || '99.9%',
+          temperature: m.temperature || '36.0°C',
+          efficiency: Number(m.efficiency || 98.5),
+          totalMinedUGX: Number(m.total_mined_ugx || m.totalMinedUGX || 0),
+          unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || m.unclaimedRewardsUGX || 0),
+          isBoosted: Boolean(m.is_boosted || m.isBoosted),
+        };
+      });
 
       // One-time migrations: the old seeded catalog had an unrealistic jump from
       // UGX 15,000 straight to millions, and rewards that didn't match the new

@@ -28,7 +28,7 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
             src={machine.image}
             alt={machine.title}
             fallbackCategory={machine.category}
-            className="w-full h-full object-contain mix-blend-multiply transition-transform duration-300 hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-300 hover:scale-105"
           />
         </div>
 

@@ -83,7 +83,7 @@ export const ManageMachineModal: React.FC<ManageMachineModalProps> = ({
                 src={machine.image}
                 alt={machine.title}
                 fallbackCategory={machine.category}
-                className="w-full h-full object-contain mix-blend-multiply"
+                className="w-full h-full object-contain"
               />
             </div>
             <div className="flex-1 min-w-0">

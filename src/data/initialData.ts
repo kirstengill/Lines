@@ -3,20 +3,22 @@ import { Machine, WalletState, Transaction, AdminTask, AppNotification } from '.
 import solarMechImg from '../assets/images/solar_mech_mower_1787659824325.jpg';
 import dsMiningShoeImg from '../assets/images/ds_mining_shoe_1787659840182.jpg';
 import cleanHydroImg from '../assets/images/clean_hydro_turbine_1787659856249.jpg';
+import electricSkateboardImg from '../assets/images/electric_skateboard_1788265113440.jpg';
+import modernizedSkateImg from '../assets/images/modernized_skate_1788265129058.jpg';
 
 export const AVAILABLE_CATALOG: Machine[] = [
   {
     id: 'mach_starter_15k',
-    title: 'STARTER NODE',
-    subtitle: '(Entry-level Miner)',
+    title: 'STARTER NODE (E-Skate Pro)',
+    subtitle: '(Kinetic Electric Skateboard)',
     category: 'DS-Mining',
-    image: solarMechImg,
+    image: electricSkateboardImg,
     dailyRewardUGX: 3500,
     status: 'Active',
     estYearlyROI: 8517,
     minInvestUGX: 15000,
     hashrate: '2.5 TH/s',
-    powerSource: 'Grid Power',
+    powerSource: 'Dual Hub Motor + Kinetic Regen',
     uptime: '99.50%',
     temperature: '35.0°C',
     efficiency: 95.0,
@@ -45,10 +47,10 @@ export const AVAILABLE_CATALOG: Machine[] = [
   },
   {
     id: 'mach_ds_mining_shoe',
-    title: 'DS-MINING SHOE (Series 1)',
-    subtitle: undefined,
+    title: 'DS-MINING SHOE (Modern Skate)',
+    subtitle: '(Modernized Kinetic Roller-Miner)',
     category: 'DS-Mining',
-    image: dsMiningShoeImg,
+    image: modernizedSkateImg,
     dailyRewardUGX: 6750,
     status: 'Active',
     estYearlyROI: 8213,
