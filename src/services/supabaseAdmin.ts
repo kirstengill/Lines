@@ -29,55 +29,57 @@ export const supabaseAdmin = {
     const sb = getSupabaseClient();
     if (!sb) return { success: false, error: 'Database not configured' };
 
+    const numericAmount = Number(input.amountUGX);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return { success: false, error: 'Please enter a valid numeric amount greater than 0.' };
+    }
+
     try {
       const { data, error } = await sb.rpc('submit_transaction', {
         p_type: input.type,
-        p_amount_ugx: input.amountUGX,
+        p_amount_ugx: numericAmount,
         p_description: input.description ?? null,
         p_payment_method: input.paymentMethod ?? null,
         p_recipient_info: input.recipientInfo ?? null,
       });
 
       if (!error && data) {
-        const dateObj = data.timestamp
-          ? new Date(data.timestamp)
-          : (data.created_at ? new Date(data.created_at) : new Date());
-        const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
-        const isoTs = data.timestamp ? String(data.timestamp) : (data.created_at ? String(data.created_at) : new Date().toISOString());
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) {
+          const dateObj = row.timestamp
+            ? new Date(row.timestamp)
+            : (row.created_at ? new Date(row.created_at) : new Date());
+          const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString() : new Date().toLocaleString();
+          const isoTs = row.timestamp ? String(row.timestamp) : (row.created_at ? String(row.created_at) : new Date().toISOString());
 
-        return {
-          success: true,
-          transaction: {
-            id: data.id,
-            userId: data.user_id,
-            type: data.type,
-            amountUGX: Number(data.amount_ugx),
-            currency: 'UGX',
-            status: data.status || 'pending',
-            date: dateStr,
-            timestamp: isoTs,
-            created_at: data.created_at || isoTs,
-            description: data.description || `${data.type.toUpperCase()} Request`,
-            paymentMethod: data.payment_method,
-            recipientInfo: data.recipient_info,
-          },
-        };
+          return {
+            success: true,
+            transaction: {
+              id: row.id,
+              userId: row.user_id,
+              type: row.type,
+              amountUGX: Number(row.amount_ugx || numericAmount),
+              currency: 'UGX',
+              status: row.status || 'pending',
+              date: dateStr,
+              timestamp: isoTs,
+              created_at: row.created_at || isoTs,
+              description: row.description || `${row.type.toUpperCase()} Request`,
+              paymentMethod: row.payment_method,
+              recipientInfo: row.recipient_info,
+            },
+          };
+        }
       }
 
-      // If the RPC returned a business/validation error, return the actual user error message
+      // If the RPC returned an error from Supabase
       if (error) {
-        const errMsg = (error.message || '').toLowerCase();
-        const isUserValidationError =
-          errMsg.includes('insufficient balance') ||
-          errMsg.includes('account is blocked') ||
-          errMsg.includes('amount must be') ||
-          errMsg.includes('invalid transaction') ||
-          errMsg.includes('wallet not found');
-
-        if (isUserValidationError) {
-          return { success: false, error: error.message || 'Transaction validation failed' };
+        const errMsg = error.message || '';
+        const isFunctionMissing = errMsg.includes('does not exist') || errMsg.includes('42883') || errMsg.includes('could not find');
+        if (!isFunctionMissing) {
+          return { success: false, error: translate(errMsg) };
         }
-        console.warn('submit_transaction RPC failed, falling back to direct table submission:', error.message);
+        console.warn('submit_transaction RPC not found, executing direct table submission:', errMsg);
       }
 
       // Resilient fallback if RPC has a server-side runtime error or is missing
@@ -98,7 +100,7 @@ export const supabaseAdmin = {
       // Check balance and minimum for withdrawals
       if (input.type === 'withdraw') {
         const MIN_WITHDRAWAL_UGX = 4000;
-        if (input.amountUGX < MIN_WITHDRAWAL_UGX) {
+        if (numericAmount < MIN_WITHDRAWAL_UGX) {
           return {
             success: false,
             error: `Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`,
@@ -107,10 +109,10 @@ export const supabaseAdmin = {
 
         const { data: walletRow } = await sb.from('wallets').select('total_balance_ugx').eq('user_id', userId).maybeSingle();
         const availableBalance = walletRow ? Number(walletRow.total_balance_ugx) : 0;
-        if (input.amountUGX > availableBalance) {
+        if (numericAmount > availableBalance) {
           return {
             success: false,
-            error: `Insufficient balance: requested UGX ${input.amountUGX.toLocaleString()}, available UGX ${availableBalance.toLocaleString()}`,
+            error: `Insufficient balance: requested UGX ${numericAmount.toLocaleString()}, available UGX ${availableBalance.toLocaleString()}`,
           };
         }
       }
@@ -122,10 +124,10 @@ export const supabaseAdmin = {
         id: txId,
         user_id: userId,
         type: input.type,
-        amount_ugx: input.amountUGX,
+        amount_ugx: numericAmount,
         currency: 'UGX',
         status: 'pending',
-        description: input.description || `${input.type.toUpperCase()} Request — UGX ${input.amountUGX.toLocaleString()}`,
+        description: input.description || `${input.type.toUpperCase()} Request — UGX ${numericAmount.toLocaleString()}`,
         payment_method: input.paymentMethod || null,
         recipient_info: input.recipientInfo || null,
         created_at: nowIso,
@@ -786,6 +788,67 @@ export const supabaseAdmin = {
       const newBal = tx.type === 'deposit' ? curBal + amount : curBal - amount;
 
       await sb.from('wallets').update({ total_balance_ugx: newBal, updated_at: new Date().toISOString() }).eq('user_id', tx.user_id);
+
+      // If approved transaction is a deposit, process 20% commission for referrer
+      if (tx.type === 'deposit') {
+        try {
+          const { data: profile } = await sb.from('profiles').select('referred_by, username').eq('id', tx.user_id).maybeSingle();
+          if (profile?.referred_by) {
+            const { data: referrer } = await sb
+              .from('profiles')
+              .select('id, referral_earnings_ugx')
+              .ilike('referral_code', profile.referred_by.trim())
+              .neq('id', tx.user_id)
+              .maybeSingle();
+
+            if (referrer) {
+              const commissionUGX = Math.round(amount * 0.20);
+              if (commissionUGX > 0) {
+                // Update referrer stats
+                const curEarnings = Number(referrer.referral_earnings_ugx || 0);
+                await sb.from('profiles').update({
+                  referral_earnings_ugx: curEarnings + commissionUGX,
+                  updated_at: new Date().toISOString(),
+                }).eq('id', referrer.id);
+
+                // Credit referrer wallet
+                const { data: refWallet } = await sb.from('wallets').select('total_balance_ugx').eq('user_id', referrer.id).maybeSingle();
+                const refBal = Number(refWallet?.total_balance_ugx || 0);
+                await sb.from('wallets').update({
+                  total_balance_ugx: refBal + commissionUGX,
+                  updated_at: new Date().toISOString(),
+                }).eq('user_id', referrer.id);
+
+                // Add 20% commission transaction for referrer
+                const commTxId = `tx_refcomm_${txId}`;
+                await sb.from('transactions').insert({
+                  id: commTxId,
+                  user_id: referrer.id,
+                  type: 'bonus',
+                  amount_ugx: commissionUGX,
+                  currency: 'UGX',
+                  status: 'completed',
+                  description: `Referral commission (20%) from @${profile.username || 'partner'}'s approved deposit of UGX ${amount.toLocaleString()}`,
+                  created_at: new Date().toISOString(),
+                });
+
+                // Add notification for referrer
+                await sb.from('notifications').insert({
+                  id: `notif_refcomm_${txId}`,
+                  user_id: referrer.id,
+                  title: 'Referral Commission (20%) Credited',
+                  message: `Your referral @${profile.username || 'partner'} had a deposit of UGX ${amount.toLocaleString()} approved. You earned UGX ${commissionUGX.toLocaleString()} (20% commission)!`,
+                  read: false,
+                  type: 'success',
+                  created_at: new Date().toISOString(),
+                });
+              }
+            }
+          }
+        } catch (refErr) {
+          console.warn('Referral commission processing fallback warning:', refErr);
+        }
+      }
 
       return { success: true, newBalance: newBal };
     } catch (e: any) {

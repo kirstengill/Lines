@@ -593,28 +593,49 @@ class AuthService {
 
   /**
    * Load the referred-users list from Supabase: profiles whose referred_by
-   * matches this user's referral code. Per-user commission is included only
-   * when the backend records it; the 15% calculation always stays server-side.
+   * matches this user's referral code. Per-user 20% commission is loaded
+   * from actual approved deposit commission transactions in Supabase.
    */
   private async fetchReferrals(referralCode: string): Promise<ReferralPartner[]> {
     if (!this.client || !referralCode) return [];
     try {
-      const { data, error } = await this.client
+      const { data: profiles, error } = await this.client
         .from('profiles')
         .select('id, username, full_name, created_at, status')
         .eq('referred_by', referralCode)
         .order('created_at', { ascending: false });
-      if (error || !data) return [];
-      return data.map((r: any) => ({
-        id: r.id,
-        username: r.username || 'user',
-        fullName: r.full_name || undefined,
-        registeredDate: r.created_at
-          ? new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-          : '',
-        status: (r.status === 'active' ? 'active' : 'pending') as 'active' | 'pending',
-        rewardUGX: typeof r.reward_ugx === 'number' ? r.reward_ugx : undefined,
-      }));
+      if (error || !profiles) return [];
+
+      // Fetch commission transactions for this user from Supabase
+      let commTxs: any[] = [];
+      if (this.currentUser?.id) {
+        const { data: txData } = await this.client
+          .from('transactions')
+          .select('amount_ugx, description')
+          .eq('user_id', this.currentUser.id)
+          .eq('status', 'completed')
+          .in('type', ['bonus', 'reward']);
+        commTxs = txData || [];
+      }
+
+      return profiles.map((r: any) => {
+        const partnerUsername = (r.username || '').toLowerCase();
+        // Match commission transactions mentioning this partner
+        const earnedFromPartner = commTxs
+          .filter((tx) => (tx.description || '').toLowerCase().includes(`@${partnerUsername}`))
+          .reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
+
+        return {
+          id: r.id,
+          username: r.username || 'user',
+          fullName: r.full_name || undefined,
+          registeredDate: r.created_at
+            ? new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : '',
+          status: earnedFromPartner > 0 ? ('active' as const) : ('pending' as const),
+          rewardUGX: earnedFromPartner > 0 ? earnedFromPartner : undefined,
+        };
+      });
     } catch {
       return [];
     }
@@ -640,11 +661,12 @@ class AuthService {
   // DIRECT CLOUD PERSISTENCE ACTIONS
   // ==========================================================
 
-  public async submitDeposit(amountUGX: number, paymentMethod: string, referenceInfo?: string) {
+  public async submitDeposit(amountUGX: number, paymentMethod: string, referenceInfo?: string, description?: string) {
+    const numericAmount = Number(amountUGX);
     const res = await supabaseAdmin.submitTransaction({
       type: 'deposit',
-      amountUGX,
-      description: `Deposit — UGX ${amountUGX.toLocaleString()} — Pending`,
+      amountUGX: numericAmount,
+      description: description || `Deposit — UGX ${numericAmount.toLocaleString()} — Pending`,
       paymentMethod,
       recipientInfo: referenceInfo ?? undefined,
     });

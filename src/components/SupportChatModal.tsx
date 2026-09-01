@@ -89,8 +89,9 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "• Approvals: Requests are processed by administrators and dispatched directly to your mobile money or bank account.";
       } else if (lower.includes('referral') || lower.includes('invite') || lower.includes('commission') || lower.includes('bonus') || lower.includes('friend')) {
         reply = "SolNova Referral Program:\n\n" +
-          "• You earn 15% commission on every approved deposit made by users who register using your referral link/code!\n" +
-          "• Example: If your friend deposits UGX 100,000, you receive UGX 15,000 directly in your wallet.\n" +
+          "• You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
+          "• Registration links accounts; rewards are generated as soon as the referred user's deposit is approved by the admin.\n" +
+          "• Example: If your friend deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.\n" +
           "• All new users also get a UGX 4,000 welcome bonus upon signup.";
       } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('payout')) {
         reply = "Daily yields accumulate continuously on your active mining nodes. Simply tap the 'Harvest' or 'Claim' button on any active machine in your Dashboard or Machines tab to credit the UGX directly into your Consolidated Wallet!";

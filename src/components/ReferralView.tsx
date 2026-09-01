@@ -59,7 +59,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
   const handleNativeShare = async () => {
     const shareData = {
       title: 'SolNova Capital — Solar Mining & Investment',
-      text: `Join SolNova Capital with my invitation code ${referralCode}. I earn 15% of your first approved deposit — start your mining journey today!`,
+      text: `Join SolNova Capital with my invitation code ${referralCode}. Earn daily mining yields in Uganda (UGX) — start today!`,
       url: referralUrl,
     };
 
@@ -106,17 +106,17 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
             <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-full text-amber-300 flex items-center gap-1 border border-white/10">
               <Sparkles className="w-3 h-3 text-amber-300" /> Referral Program
             </span>
-            <span className="text-[11px] font-mono text-blue-200">
-              15% Deposit Commission
+            <span className="text-[11px] font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
+              20% Deposit Commission
             </span>
           </div>
 
           <div>
             <h2 className="text-[19px] font-black tracking-tight leading-tight">
-              Earn 15% From Every Referred Deposit
+              Earn 20% From Every Approved Deposit
             </h2>
             <p className="text-[12.5px] text-blue-100/90 mt-1 leading-relaxed">
-              When someone joins using your referral link and makes an approved deposit, you earn <span className="font-bold text-white">15% of their deposit</span> directly to your wallet.
+              When a user signs up using your referral code and makes a deposit, you receive <span className="font-bold text-white">20% commission</span> credited directly to your wallet once the deposit is approved by the admin.
             </p>
           </div>
 
@@ -209,7 +209,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
       {/* How It Works Section */}
       <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
         <h3 className="text-[14.5px] font-extrabold text-slate-900 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-500" /> How the Referral Program Works
+          <Zap className="w-4 h-4 text-amber-500" /> How the 20% Referral Commission Works
         </h3>
 
         <div className="space-y-3.5">
@@ -230,15 +230,15 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
 
           {/* Step 2 */}
           <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[12px] flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-extrabold text-[12px] flex items-center justify-center shrink-0 mt-0.5">
               2
             </div>
             <div>
               <h4 className="text-[13px] font-bold text-slate-900 leading-snug">
-                Your Friend Registers Using Your Link
+                Partner Signs Up
               </h4>
               <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">
-                When your contact signs up with your link, their account is instantly linked to you.
+                When your friend registers with your code, their account is permanently linked to you. Signing up connects your accounts without generating an immediate reward.
               </p>
             </div>
           </div>
@@ -250,25 +250,25 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
             </div>
             <div>
               <h4 className="text-[13px] font-bold text-slate-900 leading-snug">
-                Your Friend Makes an Approved Deposit
+                Partner Makes a Deposit
               </h4>
               <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">
-                Once their deposit is approved, the commission is calculated automatically.
+                Your referred friend submits a deposit via MTN MoMo or Airtel Money. The deposit undergoes standard admin verification.
               </p>
             </div>
           </div>
 
           {/* Step 4 */}
           <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 font-extrabold text-[12px] flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[12px] flex items-center justify-center shrink-0 mt-0.5">
               4
             </div>
             <div>
               <h4 className="text-[13px] font-bold text-slate-900 leading-snug">
-                You Earn 15% of Their Deposit
+                You Earn 20% on Admin Approval
               </h4>
               <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">
-                15% of every approved deposit is credited directly to your wallet.
+                As soon as the administrator approves the deposit, 20% commission is immediately credited to your wallet and recorded in your Supabase transaction history.
               </p>
             </div>
           </div>
@@ -278,15 +278,25 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
       {/* Example Section */}
       <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-3xl p-5 border border-emerald-200/70 shadow-xs space-y-2">
         <h3 className="text-[14.5px] font-extrabold text-slate-900 flex items-center gap-2">
-          <Percent className="w-4 h-4 text-emerald-600" /> Example
+          <Percent className="w-4 h-4 text-emerald-600" /> 20% Commission Examples
         </h3>
-        <p className="text-[12.5px] text-slate-600 leading-relaxed">
-          If your referred user deposits <span className="font-bold text-slate-900">UGX 100,000</span>, you earn{' '}
-          <span className="font-black text-emerald-700">UGX 15,000</span> — 15% of their deposit, credited straight to your wallet.
+        <p className="text-[12.5px] text-slate-700 leading-relaxed">
+          If your referred partner deposits <span className="font-bold text-slate-900">UGX 100,000</span>, once approved by admin you receive{' '}
+          <span className="font-black text-emerald-700">UGX 20,000</span> (20%) directly into your wallet.
         </p>
-        <div className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-500">
-          <Percent className="w-3.5 h-3.5 text-emerald-600" />
-          <span>UGX 15,000 deposit → UGX 2,250 • UGX 50,000 deposit → UGX 7,500 • UGX 100,000 deposit → UGX 15,000</span>
+        <div className="grid grid-cols-3 gap-2 pt-1.5 text-center text-[11px]">
+          <div className="bg-white/80 rounded-xl p-2 border border-emerald-200/60">
+            <span className="text-slate-500 block">UGX 15,000 Dep</span>
+            <span className="font-bold text-emerald-700 block mt-0.5">+UGX 3,000</span>
+          </div>
+          <div className="bg-white/80 rounded-xl p-2 border border-emerald-200/60">
+            <span className="text-slate-500 block">UGX 50,000 Dep</span>
+            <span className="font-bold text-emerald-700 block mt-0.5">+UGX 10,000</span>
+          </div>
+          <div className="bg-white/80 rounded-xl p-2 border border-emerald-200/60">
+            <span className="text-slate-500 block">UGX 100,000 Dep</span>
+            <span className="font-bold text-emerald-700 block mt-0.5">+UGX 20,000</span>
+          </div>
         </div>
       </div>
 
@@ -294,10 +304,10 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
       <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[14.5px] font-extrabold text-slate-900 flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-emerald-600" /> Referred Users ({referralsList.length})
+            <UserCheck className="w-4 h-4 text-emerald-600" /> Referred Partners ({referralsList.length})
           </h3>
           <span className="text-[11px] font-bold text-slate-400">
-            Real-Time Sync
+            Supabase Live Data
           </span>
         </div>
 
@@ -308,7 +318,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
               No referrals yet
             </p>
             <p className="text-[11.5px] text-slate-500 max-w-xs mx-auto">
-              Share your link above to invite your first referral and start earning 15% of every approved deposit they make.
+              Share your invitation link above. When friends join and make an approved deposit, your 20% commission will appear here automatically.
             </p>
             <button
               onClick={handleNativeShare}
@@ -335,17 +345,19 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
                   </div>
                 </div>
                 <div className="text-right">
-                  {typeof partner.rewardUGX === 'number' ? (
+                  {typeof partner.rewardUGX === 'number' && partner.rewardUGX > 0 ? (
                     <span className="text-[12.5px] font-mono font-bold text-emerald-600 block">
                       +UGX {partner.rewardUGX.toLocaleString()}
                     </span>
                   ) : (
-                    <span className="text-[12.5px] font-mono font-bold text-slate-400 block">
-                      UGX 0
+                    <span className="text-[11.5px] font-medium text-slate-400 block">
+                      Deposit Pending
                     </span>
                   )}
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
-                    {partner.status}
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                    partner.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {partner.status === 'active' ? '20% Commission Paid' : 'Registered'}
                   </span>
                 </div>
               </div>
@@ -356,7 +368,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({ user }) => {
 
       {/* Footer Info */}
       <div className="text-center pt-2 text-[11px] text-slate-400">
-        SolNova Capital Referral Program • Uganda (UGX)
+        SolNova Capital Referral Program • 20% Deposit Commission
       </div>
     </div>
   );
