@@ -388,7 +388,7 @@ class AuthService {
         referralCount: data.referral_count || 0,
         referralEarningsUGX: data.referral_earnings_ugx || 0,
         referrals,
-        welcomeBonusClaimed: data.welcome_bonus_claimed !== false,
+        welcomeBonusClaimed: data.welcome_bonus_claimed === true,
         createdAt: data.created_at,
         isAdmin,
       };
@@ -441,7 +441,7 @@ class AuthService {
             referralCount: profileRes.data.referral_count || 0,
             referralEarningsUGX: profileRes.data.referral_earnings_ugx || 0,
             referrals,
-            welcomeBonusClaimed: profileRes.data.welcome_bonus_claimed !== false,
+            welcomeBonusClaimed: profileRes.data.welcome_bonus_claimed === true,
             createdAt: profileRes.data.created_at,
             isAdmin,
           };
@@ -869,6 +869,160 @@ class AuthService {
       };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to claim referral commission' };
+    }
+  }
+
+  /**
+   * Claim one-time UGX 4,000 Welcome Bonus via Supabase RPC claim_welcome_bonus().
+   * Requires an approved/completed deposit. 0% transaction fee.
+   */
+  public async claimWelcomeBonus(): Promise<{
+    success: boolean;
+    claimedUGX?: number;
+    newBalance?: number;
+    error?: string;
+    message?: string;
+  }> {
+    if (!this.currentUser) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    if (!this.client) {
+      return { success: false, error: 'Database client not initialized' };
+    }
+
+    try {
+      // 1. Authoritative: Call Supabase RPC claim_welcome_bonus()
+      const { data, error } = await this.client.rpc('claim_welcome_bonus');
+
+      if (error) {
+        const errMsg = error.message || '';
+        if (errMsg.toLowerCase().includes('already') || errMsg.includes('ALREADY_CLAIMED')) {
+          await this.refreshUserData();
+          return { success: false, error: 'Welcome bonus has already been claimed for this account.' };
+        }
+        if (errMsg.toLowerCase().includes('deposit') || errMsg.includes('DEPOSIT_REQUIRED')) {
+          return { success: false, error: 'An approved deposit is required to unlock your UGX 4,000 Welcome Bonus.' };
+        }
+
+        // Direct fallback if RPC is not yet registered in database
+        return await this.claimWelcomeBonusDirectFallback();
+      }
+
+      if (data && data.success === false) {
+        await this.refreshUserData();
+        return {
+          success: false,
+          error: data.error || data.message || 'Failed to claim welcome bonus.',
+        };
+      }
+
+      const claimedUGX = Number(data?.claimed_ugx ?? 4000);
+      const currentBal = this.getUserData(this.currentUser.id)?.wallet?.totalBalanceUGX || 0;
+      const newBalance = Number(data?.new_balance ?? (currentBal + 4000));
+
+      // Refresh local user profile and wallet data directly from Supabase
+      await this.refreshUserData();
+
+      return {
+        success: true,
+        claimedUGX,
+        newBalance,
+        message: data?.message || 'Welcome Bonus Claimed! UGX 4,000 has been added to your wallet.',
+      };
+    } catch (err: any) {
+      console.warn('claimWelcomeBonus error:', err);
+      return {
+        success: false,
+        error: err?.message || 'An error occurred while claiming your welcome bonus.',
+      };
+    }
+  }
+
+  /**
+   * Direct fallback to claim welcome bonus if RPC is unprovisioned
+   */
+  private async claimWelcomeBonusDirectFallback(): Promise<{
+    success: boolean;
+    claimedUGX?: number;
+    newBalance?: number;
+    error?: string;
+    message?: string;
+  }> {
+    if (!this.client || !this.currentUser) return { success: false, error: 'Authentication required' };
+    const userId = this.currentUser.id;
+
+    try {
+      // Check if profile already claimed
+      const { data: profile } = await this.client.from('profiles').select('welcome_bonus_claimed').eq('id', userId).single();
+      if (profile?.welcome_bonus_claimed === true) {
+        await this.refreshUserData();
+        return { success: false, error: 'Welcome bonus has already been claimed for this account.' };
+      }
+
+      // Check if user has an approved deposit
+      const { data: deposits } = await this.client
+        .from('transactions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', 'deposit')
+        .in('status', ['completed', 'approved']);
+
+      if (!deposits || deposits.length === 0) {
+        return { success: false, error: 'Make and complete your first deposit to unlock your UGX 4,000 Welcome Bonus.' };
+      }
+
+      // Update profile
+      await this.client.from('profiles').update({
+        welcome_bonus_claimed: true,
+        updated_at: new Date().toISOString(),
+      }).eq('id', userId);
+
+      // Credit wallet + 4000
+      const { data: wallet } = await this.client.from('wallets').select('total_balance_ugx').eq('user_id', userId).single();
+      const currentBal = Number(wallet?.total_balance_ugx || 0);
+      const newBal = currentBal + 4000;
+      await this.client.from('wallets').update({
+        total_balance_ugx: newBal,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', userId);
+
+      // Record transaction
+      const txId = `tx_welcome_${userId}`;
+      await this.client.from('transactions').upsert({
+        id: txId,
+        user_id: userId,
+        type: 'bonus',
+        amount_ugx: 4000,
+        currency: 'UGX',
+        status: 'completed',
+        description: 'Welcome Bonus — UGX 4,000 claimed (0% Fee)',
+        is_credit: true,
+        timestamp: Date.now(),
+        created_at: new Date().toISOString(),
+      });
+
+      // Record notification
+      await this.client.from('notifications').upsert({
+        id: `notif_welcome_${userId}`,
+        user_id: userId,
+        title: 'Welcome Bonus Claimed (UGX 4,000)',
+        message: 'UGX 4,000 Welcome Bonus has been credited to your wallet balance with 0% transaction fee!',
+        read: false,
+        type: 'success',
+        created_at: new Date().toISOString(),
+      });
+
+      await this.refreshUserData();
+
+      return {
+        success: true,
+        claimedUGX: 4000,
+        newBalance: newBal,
+        message: 'Welcome Bonus Claimed! UGX 4,000 has been added to your wallet.',
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to claim welcome bonus' };
     }
   }
 

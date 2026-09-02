@@ -138,7 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) 
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Sign Up (Get UGX 4,000)
+            Sign Up (UGX 4,000 Bonus)
           </button>
         </div>
 
@@ -158,10 +158,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) 
           <form onSubmit={handleSubmit} className="space-y-3">
             {tab === 'signup' && (
               <>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-[11px] font-bold text-emerald-950">
-                    UGX 4,000 Welcome Credit credited immediately upon registration.
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-amber-950">
+                    UGX 4,000 Welcome Bonus is reserved and unlocks with 0% fee upon your first approved deposit.
                   </span>
                 </div>
                 <div>

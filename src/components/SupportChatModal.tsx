@@ -83,16 +83,16 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "• Quick Airtel USSD: *185*1*1*0766495353*[AMOUNT]#";
       } else if (lower.includes('withdraw') || lower.includes('cash out') || lower.includes('fee') || lower.includes('minimum')) {
         reply = "Withdrawal Guidelines:\n\n" +
-          "• Minimum Withdrawal: UGX 4,000.\n" +
-          "• Transaction Fee: 15% standard processing fee.\n" +
+          "• Welcome Bonus: UGX 4,000 withdrawable at 0% transaction fee once you make any deposit and it is approved by the admin!\n" +
+          "• Minimum Standard Withdrawal: UGX 4,000.\n" +
+          "• Standard Transaction Fee: 15% processing fee.\n" +
           "• Channels: MTN MoMo, Airtel Money, or Stanbic Bank.\n" +
-          "• Approvals: Requests are processed by administrators and dispatched directly to your mobile money or bank account.";
+          "• Approvals: Requests are reviewed by administrators and dispatched directly to your mobile money number or bank account.";
       } else if (lower.includes('referral') || lower.includes('invite') || lower.includes('commission') || lower.includes('bonus') || lower.includes('friend')) {
-        reply = "SolNova Referral Program:\n\n" +
-          "• You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
-          "• Registration links accounts; rewards are generated as soon as the referred user's deposit is approved by the admin.\n" +
-          "• Example: If your friend deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.\n" +
-          "• All new users also get a UGX 4,000 welcome bonus upon signup.";
+        reply = "SolNova Referral Program & Welcome Bonus:\n\n" +
+          "• Welcome Bonus: Every new user can withdraw their UGX 4,000 Welcome Bonus at 0% transaction fee (or claim to wallet) once they deposit any amount and it is approved by the admin!\n" +
+          "• Referral Commission: You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
+          "• Example: If your friend deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.";
       } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('payout')) {
         reply = "Daily yields accumulate continuously on your active mining nodes. Simply tap the 'Harvest' or 'Claim' button on any active machine in your Dashboard or Machines tab to credit the UGX directly into your Consolidated Wallet!";
       } else if (lower.includes('bank') || lower.includes('stanbic')) {

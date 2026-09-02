@@ -154,7 +154,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         setLoading(false);
         return;
       }
-      setSuccessMsg('Account created successfully! UGX 4,000 welcome credit deposited.');
+      setSuccessMsg('Account created successfully! Complete your first deposit to unlock your UGX 4,000 Welcome Bonus.');
       setTimeout(() => {
         onAuthSuccess(res.user!, res.data);
       }, 600);
