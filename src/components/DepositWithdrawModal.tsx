@@ -221,8 +221,8 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
           ? `Sender: ${cleanSender} → To: ${RECIPIENT_NAME} (${DEPOSIT_PHONE})`
           : recipient;
 
-      // Pass total deduction as the amount to be verified and deducted from wallet
-      const submissionAmount = mode === 'withdraw' ? totalDeductionUGX : numUGX;
+      // Pass requested withdrawal amount (or deposit amount) directly to transaction handler
+      const submissionAmount = mode === 'withdraw' ? requestedWithdrawalUGX : numUGX;
       const res = await onSuccess(submissionAmount, mode, desc, channelName, referenceInfo);
       setIsProcessing(false);
 
