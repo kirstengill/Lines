@@ -110,9 +110,8 @@ CREATE TRIGGER on_auth_user_created
 
 -- ============================================================
 -- 3. REFERRAL processing: called from frontend after signup.
---    Validates the code, links profiles, increments referrer count,
---    credits referrer wallet +1000 UGX once (idempotent via tx id),
---    records a bonus transaction + notification. Self-referral blocked.
+--    Validates the code, links profiles, increments referrer count.
+--    Commission (20%) is earned ONLY when referred user's deposit is approved.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.process_referral(p_referral_code TEXT)
 RETURNS JSONB
@@ -122,17 +121,11 @@ DECLARE
   v_uid UUID := auth.uid();
   v_referrer_id UUID;
   v_referrer_username TEXT;
-  v_reward NUMERIC := 1000;
+  v_new_username TEXT;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF p_referral_code IS NULL OR btrim(p_referral_code) = '' THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'no_code');
-  END IF;
-
-  -- Already processed? (transaction id is deterministic per new user)
-  IF EXISTS (SELECT 1 FROM public.transactions
-             WHERE id = 'tx_ref_' || v_uid::text) THEN
-    RETURN jsonb_build_object('applied', false, 'reason', 'already_processed');
   END IF;
 
   -- Find referrer by referral_code (case-insensitive). Block self-referral.
@@ -148,48 +141,262 @@ BEGIN
 
   -- Link the new user to the referrer (only if not already set)
   UPDATE public.profiles
-  SET referred_by = p_referral_code, updated_at = now()
+  SET referred_by = btrim(p_referral_code), updated_at = now()
   WHERE id = v_uid AND (referred_by IS NULL OR referred_by = '');
 
-  -- Cannot reward yourself twice; also prevent referrer == new user loops
-  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_uid AND referred_by IS NULL) THEN
-    RETURN jsonb_build_object('applied', false, 'reason', 'link_failed');
-  END IF;
+  SELECT username INTO v_new_username FROM public.profiles WHERE id = v_uid;
 
-  -- Increment referrer's count + earnings
+  -- Increment referrer's referral_count
   UPDATE public.profiles
-  SET referral_count = COALESCE(referral_count,0) + 1,
-      referral_earnings_ugx = COALESCE(referral_earnings_ugx,0) + v_reward,
+  SET referral_count = (SELECT COUNT(*) FROM public.profiles WHERE lower(referred_by) = lower(btrim(p_referral_code))),
       updated_at = now()
   WHERE id = v_referrer_id;
 
-  -- Credit referrer wallet
-  UPDATE public.wallets
-  SET total_balance_ugx = total_balance_ugx + v_reward, updated_at = now()
-  WHERE user_id = v_referrer_id;
-
-  -- Referrer reward transaction (deterministic id, idempotent)
-  INSERT INTO public.transactions (id, user_id, type, amount_ugx, currency, status,
-                                   description, is_credit, timestamp, created_at)
-  VALUES ('tx_ref_' || v_uid::text, v_referrer_id, 'bonus', v_reward, 'UGX', 'completed',
-          'Referral bonus: ' || v_referrer_username || ' invited a new partner', true,
-          now(), now())
-  ON CONFLICT (id) DO NOTHING;
-
-  -- Referrer notification
+  -- Referrer notification about new registration
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
-  VALUES ('notif_ref_' || v_uid::text, v_referrer_id,
-          'Referral Bonus Credited',
-          'A new partner joined with your code. UGX ' || v_reward::text || ' reward credited to your wallet.',
-          false, 'success')
+  VALUES ('notif_refjoin_' || v_uid::text, v_referrer_id,
+          'New Referral Joined',
+          'A new partner (@' || COALESCE(v_new_username, 'partner') || ') registered using your referral code. You will earn 20% commission once their deposit is approved.',
+          false, 'info')
   ON CONFLICT (id) DO NOTHING;
 
-  RETURN jsonb_build_object('applied', true, 'referrer_id', v_referrer_id, 'reward', v_reward);
+  RETURN jsonb_build_object('applied', true, 'referrer_id', v_referrer_id);
 END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.process_referral(TEXT) FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.process_referral(TEXT) TO authenticated;
+
+-- ============================================================
+-- 3b. USER: get referral summary (count, available commission, total commission)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_referral_summary()
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_ref_code TEXT;
+  v_total_referrals INTEGER := 0;
+  v_total_approved_deposits NUMERIC := 0;
+  v_total_commission NUMERIC := 0;
+  v_claimed_commission NUMERIC := 0;
+  v_available_commission NUMERIC := 0;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+
+  SELECT referral_code INTO v_ref_code FROM public.profiles WHERE id = v_uid;
+  IF v_ref_code IS NULL OR v_ref_code = '' THEN
+    RETURN jsonb_build_object(
+      'total_referrals', 0,
+      'available_commission_ugx', 0,
+      'total_commission_ugx', 0,
+      'claimed_commission_ugx', 0,
+      'referral_code', ''
+    );
+  END IF;
+
+  -- Count real referred users
+  SELECT COUNT(*) INTO v_total_referrals
+  FROM public.profiles
+  WHERE lower(referred_by) = lower(v_ref_code) AND id <> v_uid;
+
+  -- Total approved deposits made by all referred users
+  SELECT COALESCE(SUM(t.amount_ugx), 0) INTO v_total_approved_deposits
+  FROM public.transactions t
+  INNER JOIN public.profiles p ON p.id = t.user_id
+  WHERE lower(p.referred_by) = lower(v_ref_code)
+    AND p.id <> v_uid
+    AND t.type = 'deposit'
+    AND t.status = 'completed';
+
+  -- Total commission earned (20% of approved deposits)
+  v_total_commission := ROUND(v_total_approved_deposits * 0.20);
+
+  -- Total commission already claimed
+  SELECT COALESCE(SUM(amount_ugx), 0) INTO v_claimed_commission
+  FROM public.transactions
+  WHERE user_id = v_uid
+    AND status = 'completed'
+    AND type IN ('bonus', 'reward')
+    AND (
+      id LIKE 'tx_claim_ref_%'
+      OR id LIKE 'tx_refcomm_%'
+      OR description ILIKE '%referral commission%'
+    );
+
+  v_available_commission := GREATEST(0, v_total_commission - v_claimed_commission);
+
+  -- Keep profiles stats updated
+  UPDATE public.profiles
+  SET referral_count = v_total_referrals,
+      referral_earnings_ugx = v_total_commission,
+      updated_at = now()
+  WHERE id = v_uid;
+
+  RETURN jsonb_build_object(
+    'total_referrals', v_total_referrals,
+    'available_commission_ugx', v_available_commission,
+    'total_commission_ugx', v_total_commission,
+    'claimed_commission_ugx', v_claimed_commission,
+    'referral_code', v_ref_code
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.get_referral_summary() FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.get_referral_summary() TO authenticated;
+
+-- ============================================================
+-- 3c. USER: get referred users list (names, joined date, deposits, 20% commission)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_referred_users()
+RETURNS TABLE (
+  id TEXT,
+  username TEXT,
+  full_name TEXT,
+  registered_date TEXT,
+  approved_deposit_ugx NUMERIC,
+  commission_ugx NUMERIC,
+  status TEXT,
+  commission_status TEXT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_ref_code TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+
+  SELECT referral_code INTO v_ref_code FROM public.profiles WHERE id = v_uid;
+  IF v_ref_code IS NULL OR v_ref_code = '' THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    p.id::text,
+    COALESCE(p.username, 'user') AS username,
+    COALESCE(p.full_name, '') AS full_name,
+    to_char(p.created_at, 'DD Mon YYYY') AS registered_date,
+    COALESCE(SUM(CASE WHEN t.type = 'deposit' AND t.status = 'completed' THEN t.amount_ugx ELSE 0 END), 0) AS approved_deposit_ugx,
+    ROUND(COALESCE(SUM(CASE WHEN t.type = 'deposit' AND t.status = 'completed' THEN t.amount_ugx ELSE 0 END), 0) * 0.20) AS commission_ugx,
+    CASE
+      WHEN COALESCE(SUM(CASE WHEN t.type = 'deposit' AND t.status = 'completed' THEN t.amount_ugx ELSE 0 END), 0) > 0 THEN 'active'
+      ELSE 'pending'
+    END AS status,
+    CASE
+      WHEN COALESCE(SUM(CASE WHEN t.type = 'deposit' AND t.status = 'completed' THEN t.amount_ugx ELSE 0 END), 0) > 0 THEN 'approved'
+      ELSE 'no_approved_deposit'
+    END AS commission_status
+  FROM public.profiles p
+  LEFT JOIN public.transactions t ON t.user_id = p.id
+  WHERE lower(p.referred_by) = lower(v_ref_code)
+    AND p.id <> v_uid
+  GROUP BY p.id, p.username, p.full_name, p.created_at
+  ORDER BY p.created_at DESC;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.get_referred_users() FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.get_referred_users() TO authenticated;
+
+-- ============================================================
+-- 3d. USER: claim referral commission (atomic wallet transfer)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.claim_referral_commission()
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_ref_code TEXT;
+  v_total_approved_deposits NUMERIC := 0;
+  v_total_commission NUMERIC := 0;
+  v_claimed_commission NUMERIC := 0;
+  v_available NUMERIC := 0;
+  v_wallet_bal NUMERIC := 0;
+  v_new_balance NUMERIC := 0;
+  v_tx_id TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+
+  -- Lock wallet row for update
+  SELECT total_balance_ugx INTO v_wallet_bal FROM public.wallets WHERE user_id = v_uid FOR UPDATE;
+  IF NOT FOUND THEN
+    INSERT INTO public.wallets (user_id, total_balance_ugx) VALUES (v_uid, 0) RETURNING total_balance_ugx INTO v_wallet_bal;
+  END IF;
+
+  SELECT referral_code INTO v_ref_code FROM public.profiles WHERE id = v_uid;
+  IF v_ref_code IS NULL OR v_ref_code = '' THEN
+    RETURN jsonb_build_object('success', false, 'claimed_ugx', 0, 'reason', 'no_referral_code', 'message', 'No referral code configured');
+  END IF;
+
+  -- Calculate total approved deposits
+  SELECT COALESCE(SUM(t.amount_ugx), 0) INTO v_total_approved_deposits
+  FROM public.transactions t
+  INNER JOIN public.profiles p ON p.id = t.user_id
+  WHERE lower(p.referred_by) = lower(v_ref_code)
+    AND p.id <> v_uid
+    AND t.type = 'deposit'
+    AND t.status = 'completed';
+
+  v_total_commission := ROUND(v_total_approved_deposits * 0.20);
+
+  -- Calculate already claimed commission
+  SELECT COALESCE(SUM(amount_ugx), 0) INTO v_claimed_commission
+  FROM public.transactions
+  WHERE user_id = v_uid
+    AND status = 'completed'
+    AND type IN ('bonus', 'reward')
+    AND (
+      id LIKE 'tx_claim_ref_%'
+      OR id LIKE 'tx_refcomm_%'
+      OR description ILIKE '%referral commission%'
+    );
+
+  v_available := GREATEST(0, v_total_commission - v_claimed_commission);
+
+  IF v_available <= 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'claimed_ugx', 0,
+      'reason', 'no_commission_available',
+      'message', 'No referral commission available to claim at this time.'
+    );
+  END IF;
+
+  -- Transfer available commission to wallet
+  v_new_balance := v_wallet_bal + v_available;
+  UPDATE public.wallets
+  SET total_balance_ugx = v_new_balance, updated_at = now()
+  WHERE user_id = v_uid;
+
+  -- Insert completed claim transaction
+  v_tx_id := 'tx_claim_ref_' || lower(substring(replace(gen_random_uuid()::text,'-','') from 1 for 18));
+  INSERT INTO public.transactions (id, user_id, type, amount_ugx, currency, status,
+    description, is_credit, timestamp, created_at)
+  VALUES (v_tx_id, v_uid, 'bonus', v_available, 'UGX', 'completed',
+    'Claimed Referral Commission (20%)', true, now(), now());
+
+  -- Insert notification
+  INSERT INTO public.notifications (id, user_id, title, message, read, type)
+  VALUES ('notif_' || v_tx_id, v_uid, 'Referral Commission Claimed',
+    'UGX ' || v_available::text || ' referral commission has been credited directly to your main wallet balance.',
+    false, 'success');
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'claimed_ugx', v_available,
+    'new_balance', v_new_balance,
+    'message', 'Successfully claimed UGX ' || v_available::text || ' referral commission.'
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.claim_referral_commission() FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.claim_referral_commission() TO authenticated;
 
 -- ============================================================
 -- 4. USER: submit deposit/withdraw -> pending + notification

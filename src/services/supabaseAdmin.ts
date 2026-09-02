@@ -789,7 +789,7 @@ export const supabaseAdmin = {
 
       await sb.from('wallets').update({ total_balance_ugx: newBal, updated_at: new Date().toISOString() }).eq('user_id', tx.user_id);
 
-      // If approved transaction is a deposit, process 20% commission for referrer
+      // If approved transaction is a deposit, notify referrer that 20% commission is available to claim
       if (tx.type === 'deposit') {
         try {
           const { data: profile } = await sb.from('profiles').select('referred_by, username').eq('id', tx.user_id).maybeSingle();
@@ -811,33 +811,12 @@ export const supabaseAdmin = {
                   updated_at: new Date().toISOString(),
                 }).eq('id', referrer.id);
 
-                // Credit referrer wallet
-                const { data: refWallet } = await sb.from('wallets').select('total_balance_ugx').eq('user_id', referrer.id).maybeSingle();
-                const refBal = Number(refWallet?.total_balance_ugx || 0);
-                await sb.from('wallets').update({
-                  total_balance_ugx: refBal + commissionUGX,
-                  updated_at: new Date().toISOString(),
-                }).eq('user_id', referrer.id);
-
-                // Add 20% commission transaction for referrer
-                const commTxId = `tx_refcomm_${txId}`;
-                await sb.from('transactions').insert({
-                  id: commTxId,
-                  user_id: referrer.id,
-                  type: 'bonus',
-                  amount_ugx: commissionUGX,
-                  currency: 'UGX',
-                  status: 'completed',
-                  description: `Referral commission (20%) from @${profile.username || 'partner'}'s approved deposit of UGX ${amount.toLocaleString()}`,
-                  created_at: new Date().toISOString(),
-                });
-
-                // Add notification for referrer
+                // Add notification for referrer that commission is available to claim
                 await sb.from('notifications').insert({
-                  id: `notif_refcomm_${txId}`,
+                  id: `notif_refavail_${txId}`,
                   user_id: referrer.id,
-                  title: 'Referral Commission (20%) Credited',
-                  message: `Your referral @${profile.username || 'partner'} had a deposit of UGX ${amount.toLocaleString()} approved. You earned UGX ${commissionUGX.toLocaleString()} (20% commission)!`,
+                  title: 'Referral Commission Available (20%)',
+                  message: `Your referral @${profile.username || 'partner'} had a deposit of UGX ${amount.toLocaleString()} approved. UGX ${commissionUGX.toLocaleString()} (20% commission) is now available to claim in your Referral tab!`,
                   read: false,
                   type: 'success',
                   created_at: new Date().toISOString(),
@@ -846,7 +825,7 @@ export const supabaseAdmin = {
             }
           }
         } catch (refErr) {
-          console.warn('Referral commission processing fallback warning:', refErr);
+          console.warn('Referral commission notification warning:', refErr);
         }
       }
 

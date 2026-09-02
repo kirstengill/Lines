@@ -74,8 +74,22 @@ export interface ReferralPartner {
   fullName?: string;
   registeredDate: string;
   status: 'active' | 'pending';
-  /** Commission earned from this referred user's approved deposits (when available). */
+  /** Total approved deposits from this referred user in UGX */
+  approvedDepositUGX?: number;
+  /** Commission (20%) generated from this referred user's approved deposits */
+  commissionUGX?: number;
+  /** Status of commission or deposit ('approved' | 'no_approved_deposit' | string) */
+  commissionStatus?: string;
+  /** Backwards compatibility field */
   rewardUGX?: number;
+}
+
+export interface ReferralSummary {
+  totalReferrals: number;
+  availableCommissionUGX: number;
+  totalCommissionUGX: number;
+  claimedCommissionUGX: number;
+  referralCode: string;
 }
 
 export interface UserProfile {

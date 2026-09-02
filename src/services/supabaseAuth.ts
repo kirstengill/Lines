@@ -8,6 +8,7 @@ import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import {
   UserProfile,
   ReferralPartner,
+  ReferralSummary,
   WalletState,
   Transaction,
   Machine,
@@ -588,57 +589,294 @@ class AuthService {
   }
 
   // ==========================================================
-  // REFERRAL PROCESSING (called once after signup)
+  // REFERRAL PROCESSING & SUPABASE COMMISSION RPC INTEGRATIONS
   // ==========================================================
 
   /**
-   * Load the referred-users list from Supabase: profiles whose referred_by
-   * matches this user's referral code. Per-user 20% commission is loaded
-   * from actual approved deposit commission transactions in Supabase.
+   * Fetch real referral summary from Supabase RPC get_referral_summary()
+   * Single source of truth for total referrals, available commission, and total earned.
    */
-  private async fetchReferrals(referralCode: string): Promise<ReferralPartner[]> {
-    if (!this.client || !referralCode) return [];
+  public async getReferralSummary(): Promise<ReferralSummary> {
+    const defaultSummary: ReferralSummary = {
+      totalReferrals: this.currentUser?.referralCount || 0,
+      availableCommissionUGX: 0,
+      totalCommissionUGX: this.currentUser?.referralEarningsUGX || 0,
+      claimedCommissionUGX: 0,
+      referralCode: this.currentUser?.referralCode || '',
+    };
+
+    if (!this.client || !this.currentUser) return defaultSummary;
+
     try {
-      const { data: profiles, error } = await this.client
-        .from('profiles')
-        .select('id, username, full_name, created_at, status')
-        .eq('referred_by', referralCode)
-        .order('created_at', { ascending: false });
-      if (error || !profiles) return [];
+      // 1. Primary: Call Supabase RPC get_referral_summary
+      const { data, error } = await this.client.rpc('get_referral_summary');
+      if (!error && data && typeof data === 'object') {
+        const totalReferrals = Number(data.total_referrals ?? 0);
+        const availableCommissionUGX = Number(data.available_commission_ugx ?? 0);
+        const totalCommissionUGX = Number(data.total_commission_ugx ?? 0);
+        const claimedCommissionUGX = Number(data.claimed_commission_ugx ?? 0);
+        const referralCode = String(data.referral_code || this.currentUser.referralCode || '');
 
-      // Fetch commission transactions for this user from Supabase
-      let commTxs: any[] = [];
-      if (this.currentUser?.id) {
-        const { data: txData } = await this.client
-          .from('transactions')
-          .select('amount_ugx, description')
-          .eq('user_id', this.currentUser.id)
-          .eq('status', 'completed')
-          .in('type', ['bonus', 'reward']);
-        commTxs = txData || [];
-      }
-
-      return profiles.map((r: any) => {
-        const partnerUsername = (r.username || '').toLowerCase();
-        // Match commission transactions mentioning this partner
-        const earnedFromPartner = commTxs
-          .filter((tx) => (tx.description || '').toLowerCase().includes(`@${partnerUsername}`))
-          .reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
+        // Keep local profile stats in sync
+        if (this.currentUser) {
+          this.currentUser.referralCount = totalReferrals;
+          this.currentUser.referralEarningsUGX = totalCommissionUGX;
+        }
 
         return {
-          id: r.id,
-          username: r.username || 'user',
-          fullName: r.full_name || undefined,
-          registeredDate: r.created_at
-            ? new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+          totalReferrals,
+          availableCommissionUGX,
+          totalCommissionUGX,
+          claimedCommissionUGX,
+          referralCode,
+        };
+      }
+
+      // 2. Direct Supabase Query Fallback if RPC is pending deployment
+      const refCode = this.currentUser.referralCode;
+      if (refCode) {
+        const { data: refProfiles } = await this.client
+          .from('profiles')
+          .select('id, username')
+          .ilike('referred_by', refCode.trim());
+
+        const totalReferrals = refProfiles?.length || 0;
+        const refIds = (refProfiles || []).map((p) => p.id);
+
+        let totalCommission = 0;
+        if (refIds.length > 0) {
+          const { data: approvedTxs } = await this.client
+            .from('transactions')
+            .select('amount_ugx')
+            .in('user_id', refIds)
+            .eq('type', 'deposit')
+            .eq('status', 'completed');
+
+          const totalDeposits = (approvedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
+          totalCommission = Math.round(totalDeposits * 0.20);
+        }
+
+        const { data: claimedTxs } = await this.client
+          .from('transactions')
+          .select('amount_ugx')
+          .eq('user_id', this.currentUser.id)
+          .eq('status', 'completed')
+          .in('type', ['bonus', 'reward'])
+          .or('description.ilike.%referral commission%,id.like.tx_claim_ref_%,id.like.tx_refcomm_%');
+
+        const claimedCommission = (claimedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
+        const availableCommission = Math.max(0, totalCommission - claimedCommission);
+
+        return {
+          totalReferrals,
+          availableCommissionUGX: availableCommission,
+          totalCommissionUGX: totalCommission,
+          claimedCommissionUGX: claimedCommission,
+          referralCode: refCode,
+        };
+      }
+
+      return defaultSummary;
+    } catch (e) {
+      console.warn('getReferralSummary error:', e);
+      return defaultSummary;
+    }
+  }
+
+  /**
+   * Load real referred users list from Supabase RPC get_referred_users()
+   * Returns username, registration date, approved deposit amount, and 20% commission earned.
+   */
+  public async getReferredUsers(): Promise<ReferralPartner[]> {
+    if (!this.client || !this.currentUser) return [];
+    const refCode = this.currentUser.referralCode;
+    if (!refCode) return [];
+
+    try {
+      // 1. Primary: Call Supabase RPC get_referred_users
+      const { data, error } = await this.client.rpc('get_referred_users');
+      if (!error && Array.isArray(data)) {
+        return data.map((r: any) => ({
+          id: String(r.id || ''),
+          username: String(r.username || 'user'),
+          fullName: r.full_name ? String(r.full_name) : undefined,
+          registeredDate: String(r.registered_date || ''),
+          status: (r.status === 'active' ? 'active' : 'pending') as 'active' | 'pending',
+          approvedDepositUGX: Number(r.approved_deposit_ugx ?? 0),
+          commissionUGX: Number(r.commission_ugx ?? 0),
+          commissionStatus: String(r.commission_status || (Number(r.approved_deposit_ugx) > 0 ? 'approved' : 'no_approved_deposit')),
+          rewardUGX: Number(r.commission_ugx ?? 0),
+        }));
+      }
+
+      // 2. Direct Supabase Query Fallback
+      const { data: profiles, error: pError } = await this.client
+        .from('profiles')
+        .select('id, username, full_name, created_at, status')
+        .ilike('referred_by', refCode.trim())
+        .order('created_at', { ascending: false });
+
+      if (pError || !profiles) return [];
+
+      const refIds = profiles.map((p) => p.id);
+      let approvedDepositsByUserId: Record<string, number> = {};
+
+      if (refIds.length > 0) {
+        const { data: txs } = await this.client
+          .from('transactions')
+          .select('user_id, amount_ugx')
+          .in('user_id', refIds)
+          .eq('type', 'deposit')
+          .eq('status', 'completed');
+
+        (txs || []).forEach((tx) => {
+          approvedDepositsByUserId[tx.user_id] = (approvedDepositsByUserId[tx.user_id] || 0) + (Number(tx.amount_ugx) || 0);
+        });
+      }
+
+      return profiles.map((p: any) => {
+        const approvedDep = approvedDepositsByUserId[p.id] || 0;
+        const comm = Math.round(approvedDep * 0.20);
+        return {
+          id: p.id,
+          username: p.username || 'user',
+          fullName: p.full_name || undefined,
+          registeredDate: p.created_at
+            ? new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
             : '',
-          status: earnedFromPartner > 0 ? ('active' as const) : ('pending' as const),
-          rewardUGX: earnedFromPartner > 0 ? earnedFromPartner : undefined,
+          status: approvedDep > 0 ? ('active' as const) : ('pending' as const),
+          approvedDepositUGX: approvedDep,
+          commissionUGX: comm,
+          commissionStatus: approvedDep > 0 ? 'approved' : 'no_approved_deposit',
+          rewardUGX: comm,
         };
       });
-    } catch {
+    } catch (e) {
+      console.warn('getReferredUsers error:', e);
       return [];
     }
+  }
+
+  /**
+   * Claim available referral commission atomically via Supabase RPC claim_referral_commission()
+   * Moves available commission to total_balance_ugx in wallets table.
+   */
+  public async claimReferralCommission(): Promise<{
+    success: boolean;
+    claimedUGX?: number;
+    newBalance?: number;
+    error?: string;
+    message?: string;
+  }> {
+    if (!this.client || !this.currentUser) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    try {
+      // 1. Primary: Call Supabase RPC claim_referral_commission
+      const { data, error } = await this.client.rpc('claim_referral_commission');
+      if (error) {
+        // Direct claim fallback if RPC not yet deployed in database
+        return await this.claimReferralCommissionDirectFallback();
+      }
+
+      if (data && data.success === false) {
+        return {
+          success: false,
+          error: data.message || data.reason || 'No referral commission available to claim.',
+        };
+      }
+
+      const claimedUGX = Number(data?.claimed_ugx ?? 0);
+      const newBalance = Number(data?.new_balance ?? 0);
+
+      // Refresh local user profile and wallet data directly from Supabase
+      await this.refreshUserData();
+
+      return {
+        success: true,
+        claimedUGX,
+        newBalance,
+        message: data?.message || `Successfully claimed UGX ${claimedUGX.toLocaleString()} referral commission!`,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to claim referral commission' };
+    }
+  }
+
+  /**
+   * Resilient direct claim fallback in case the RPC is pending deployment
+   */
+  private async claimReferralCommissionDirectFallback(): Promise<{
+    success: boolean;
+    claimedUGX?: number;
+    newBalance?: number;
+    error?: string;
+    message?: string;
+  }> {
+    if (!this.client || !this.currentUser) return { success: false, error: 'Authentication required' };
+
+    try {
+      const summary = await this.getReferralSummary();
+      const available = summary.availableCommissionUGX;
+      if (available <= 0) {
+        return { success: false, error: 'No referral commission available to claim at this time.' };
+      }
+
+      const userId = this.currentUser.id;
+      const { data: wallet } = await this.client.from('wallets').select('total_balance_ugx').eq('user_id', userId).single();
+      const currentBal = Number(wallet?.total_balance_ugx || 0);
+      const newBal = currentBal + available;
+
+      // Update wallet
+      await this.client.from('wallets').update({
+        total_balance_ugx: newBal,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', userId);
+
+      // Insert transaction
+      const txId = `tx_claim_ref_${Date.now()}`;
+      await this.client.from('transactions').insert({
+        id: txId,
+        user_id: userId,
+        type: 'bonus',
+        amount_ugx: available,
+        currency: 'UGX',
+        status: 'completed',
+        description: 'Claimed Referral Commission (20%)',
+        is_credit: true,
+        created_at: new Date().toISOString(),
+      });
+
+      // Insert notification
+      await this.client.from('notifications').insert({
+        id: `notif_${txId}`,
+        user_id: userId,
+        title: 'Referral Commission Claimed',
+        message: `UGX ${available.toLocaleString()} referral commission has been credited directly to your main wallet balance.`,
+        read: false,
+        type: 'success',
+        created_at: new Date().toISOString(),
+      });
+
+      await this.refreshUserData();
+
+      return {
+        success: true,
+        claimedUGX: available,
+        newBalance: newBal,
+        message: `Successfully claimed UGX ${available.toLocaleString()} referral commission!`,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to claim referral commission' };
+    }
+  }
+
+  /**
+   * Helper to fetch referrals for profile loads
+   */
+  private async fetchReferrals(_referralCode: string): Promise<ReferralPartner[]> {
+    return this.getReferredUsers();
   }
 
   public async processReferral(referralCode: string): Promise<{ applied: boolean; reason?: string; error?: string }> {
@@ -815,3 +1053,4 @@ class AuthService {
 }
 
 export const authService = new AuthService();
+export const supabaseAuth = authService;

@@ -564,6 +564,8 @@ export default function App() {
                 <div key="referral" className="animate-page-fade-in">
                   <ReferralView
                     user={user}
+                    onRefresh={handleRefreshUserData}
+                    onClaimSuccess={handleRefreshUserData}
                     onOpenAuth={() => {
                       triggerPageTransition(() => {
                         setIsAuthViewActive(true);
