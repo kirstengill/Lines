@@ -33,7 +33,7 @@ import {
   AVAILABLE_CATALOG,
 } from './data/initialData';
 import { Machine, WalletState, Transaction, AdminTask, AppNotification, UserProfile } from './types';
-import { authService, UserAccountData } from './services/supabaseAuth';
+import { authService, UserAccountData, cleanReferralCode } from './services/supabaseAuth';
 import { getSupabaseClient } from './services/supabase';
 import { Lock, AlertTriangle } from 'lucide-react';
 
@@ -47,12 +47,21 @@ export default function App() {
   // Dynamic Catalog from backend
   const [catalogMachines, setCatalogMachines] = useState<Machine[]>(AVAILABLE_CATALOG);
 
-  // URL referral detection
+  // URL referral detection & persistent caching
   const [initialReferralCode] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       try {
         const searchParams = new URLSearchParams(window.location.search);
-        return searchParams.get('ref') || searchParams.get('referral') || '';
+        const refParam = searchParams.get('ref') || searchParams.get('referral');
+        if (refParam) {
+          const cleaned = cleanReferralCode(refParam);
+          if (cleaned) {
+            localStorage.setItem('pending_referral_code', cleaned);
+            return cleaned;
+          }
+        }
+        const cached = localStorage.getItem('pending_referral_code');
+        if (cached) return cleanReferralCode(cached);
       } catch {
         return '';
       }
@@ -693,6 +702,7 @@ export default function App() {
           <AuthModal
             onClose={() => setIsAuthOpen(false)}
             onAuthSuccess={handleAuthSuccess}
+            initialReferralCode={initialReferralCode}
           />
         )}
       </div>

@@ -28,6 +28,54 @@ export interface UserAccountData {
   notifications: AppNotification[];
 }
 
+/**
+ * Helper to sanitize, normalize and format referral codes from various user inputs:
+ * Handles full URLs (https://...?ref=SC-XXXX), pasted links, missing SC- prefixes,
+ * lowercase/uppercase, and common typos (e.g. letter O instead of number 0).
+ */
+export function cleanReferralCode(input?: string | null): string {
+  if (!input) return '';
+  let str = input.trim();
+  if (!str) return '';
+
+  // Extract from full URLs or query strings if pasted
+  try {
+    if (str.includes('ref=') || str.includes('referral=')) {
+      const match = str.match(/[?&](?:ref|referral)=([^&/\s#]+)/i);
+      if (match && match[1]) {
+        str = decodeURIComponent(match[1]).trim();
+      }
+    }
+  } catch {
+    // Ignore URL parsing failure
+  }
+
+  // Strip scheme and domain if any remains
+  str = str.replace(/https?:\/\/[^\s]+/gi, '').trim();
+
+  // If there's garbage attached after a code (e.g. SC-F0BE1DHTTPS://...), extract just the code
+  const codeMatch = str.match(/(?:SC-)?[A-Z0-9]{6,10}/i);
+  if (codeMatch && codeMatch[0]) {
+    str = codeMatch[0];
+  }
+
+  // Remove whitespace
+  str = str.replace(/\s+/g, '').toUpperCase();
+
+  // Fix common letter 'O' vs digit '0' typo in hex-like referral codes
+  if (str.startsWith('SC-')) {
+    const suffix = str.slice(3);
+    if (/^[0-9A-F]{6,8}$/i.test(suffix.replace(/O/g, '0'))) {
+      str = 'SC-' + suffix.replace(/O/g, '0');
+    }
+  } else if (/^[A-Z0-9]{6,8}$/.test(str)) {
+    const fixed = str.replace(/O/g, '0');
+    str = `SC-${fixed}`;
+  }
+
+  return str;
+}
+
 class AuthService {
   private client: SupabaseClient | null = null;
   private currentUser: UserProfile | null = null;
@@ -242,6 +290,8 @@ class AuthService {
     }
     const email = `${cleanUsername}@sunrise-ds.com`;
 
+    const cleanRef = cleanReferralCode(referralCode);
+
     // Single authentication path: Supabase Auth.
     // NEVER submit is_admin/role in metadata: new users are always normal users.
     const { data: authData, error: authError } = await this.client.auth.signUp({
@@ -252,7 +302,7 @@ class AuthService {
           username: cleanUsername,
           full_name: (fullName || cleanUsername).trim(),
           phone: phone || '',
-          referred_by: referralCode || '',
+          referred_by: cleanRef,
         },
       },
     });
@@ -283,11 +333,33 @@ class AuthService {
 
     // Process referral (link profiles, credit referrer, record tx + notification).
     // Safe to call repeatedly: the DB function is idempotent per new user.
-    if (referralCode && referralCode.trim()) {
+    if (cleanRef) {
       try {
-        const refRes = await this.processReferral(referralCode);
+        const refRes = await this.processReferral(cleanRef);
         if (!refRes.applied && refRes.reason && refRes.reason !== 'no_code' && refRes.reason !== 'already_processed') {
           console.warn('Referral not applied:', refRes.reason);
+        }
+
+        // Sync referrer's referral_count in profiles
+        const { data: refParent } = await this.client
+          .from('profiles')
+          .select('id, referral_count')
+          .ilike('referral_code', cleanRef)
+          .maybeSingle();
+
+        if (refParent) {
+          const { count } = await this.client
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .ilike('referred_by', cleanRef);
+
+          await this.client
+            .from('profiles')
+            .update({
+              referral_count: count || ((Number(refParent.referral_count) || 0) + 1),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', refParent.id);
         }
       } catch (e) {
         console.warn('Referral processing warning:', e);
@@ -371,6 +443,8 @@ class AuthService {
       const status = typeof data.status === 'string' ? data.status : 'active';
 
       const referrals = await this.fetchReferrals(data.referral_code || '');
+      const realReferralCount = Math.max(referrals.length, Number(data.referral_count) || 0);
+      const realReferralEarnings = Number(data.referral_earnings_ugx) || 0;
 
       return {
         id: data.id,
@@ -385,8 +459,8 @@ class AuthService {
         country: 'Uganda',
         referralCode: data.referral_code || '',
         referredBy: data.referred_by,
-        referralCount: data.referral_count || 0,
-        referralEarningsUGX: data.referral_earnings_ugx || 0,
+        referralCount: realReferralCount,
+        referralEarningsUGX: realReferralEarnings,
         referrals,
         welcomeBonusClaimed: data.welcome_bonus_claimed === true,
         createdAt: data.created_at,
@@ -425,6 +499,8 @@ class AuthService {
           // Authoritative admin flag: public.profiles.is_admin
           const isAdmin = profileRes.data.is_admin === true;
           const referrals = await this.fetchReferrals(profileRes.data.referral_code || '');
+          const realReferralCount = Math.max(referrals.length, Number(profileRes.data.referral_count) || 0);
+          const realReferralEarnings = Number(profileRes.data.referral_earnings_ugx) || 0;
           this.currentUser = {
             id: profileRes.data.id,
             username: profileRes.data.username,
@@ -438,8 +514,8 @@ class AuthService {
             country: 'Uganda',
             referralCode: profileRes.data.referral_code || '',
             referredBy: profileRes.data.referred_by,
-            referralCount: profileRes.data.referral_count || 0,
-            referralEarningsUGX: profileRes.data.referral_earnings_ugx || 0,
+            referralCount: realReferralCount,
+            referralEarningsUGX: realReferralEarnings,
             referrals,
             welcomeBonusClaimed: profileRes.data.welcome_bonus_claimed === true,
             createdAt: profileRes.data.created_at,
@@ -605,45 +681,46 @@ class AuthService {
       referralCode: this.currentUser?.referralCode || '',
     };
 
-    if (!this.client || !this.currentUser) return defaultSummary;
+    if (!this.client) return defaultSummary;
 
     try {
-      // 1. Primary: Call Supabase RPC get_referral_summary
-      const { data, error } = await this.client.rpc('get_referral_summary');
-      if (!error && data && typeof data === 'object') {
-        const totalReferrals = Number(data.total_referrals ?? 0);
-        const availableCommissionUGX = Number(data.available_commission_ugx ?? 0);
-        const totalCommissionUGX = Number(data.total_commission_ugx ?? 0);
-        const claimedCommissionUGX = Number(data.claimed_commission_ugx ?? 0);
-        const referralCode = String(data.referral_code || this.currentUser.referralCode || '');
+      const activeCode = cleanReferralCode(this.currentUser?.referralCode || '');
 
-        // Keep local profile stats in sync
-        if (this.currentUser) {
-          this.currentUser.referralCount = totalReferrals;
-          this.currentUser.referralEarningsUGX = totalCommissionUGX;
-        }
-
-        return {
-          totalReferrals,
-          availableCommissionUGX,
-          totalCommissionUGX,
-          claimedCommissionUGX,
-          referralCode,
-        };
+      // 1. Primary: Call Supabase RPC get_my_referral_summary or get_referral_summary
+      let rpcRes = await this.client.rpc('get_my_referral_summary');
+      if (rpcRes.error || !rpcRes.data) {
+        rpcRes = await this.client.rpc('get_referral_summary');
       }
 
-      // 2. Direct Supabase Query Fallback if RPC is pending deployment
-      const refCode = this.currentUser.referralCode;
-      if (refCode) {
-        const { data: refProfiles } = await this.client
+      let totalReferrals = 0;
+      let availableCommissionUGX = 0;
+      let totalCommissionUGX = 0;
+      let claimedCommissionUGX = 0;
+      let referralCode = activeCode;
+
+      if (!rpcRes.error && rpcRes.data && typeof rpcRes.data === 'object') {
+        totalReferrals = Number(rpcRes.data.referral_count ?? rpcRes.data.total_referrals ?? 0);
+        availableCommissionUGX = Number(rpcRes.data.available_commission_ugx ?? 0);
+        totalCommissionUGX = Number(rpcRes.data.total_commission_ugx ?? 0);
+        claimedCommissionUGX = Number(rpcRes.data.claimed_commission_ugx ?? 0);
+        referralCode = cleanReferralCode(String(rpcRes.data.referral_code || activeCode));
+      }
+
+      // Cross-verify with direct Supabase tables to guarantee real-time accuracy:
+      // Even if the RPC was cached or returning delayed results, direct tables show actual counts.
+      if (referralCode) {
+        const bareCode = referralCode.replace(/^SC-/, '');
+        const { data: directProfiles } = await this.client
           .from('profiles')
-          .select('id, username')
-          .ilike('referred_by', refCode.trim());
+          .select('id')
+          .or(`referred_by.ilike.${referralCode},referred_by.ilike.${bareCode}`);
 
-        const totalReferrals = refProfiles?.length || 0;
-        const refIds = (refProfiles || []).map((p) => p.id);
+        const liveCount = directProfiles?.length || 0;
+        if (liveCount > totalReferrals) {
+          totalReferrals = liveCount;
+        }
 
-        let totalCommission = 0;
+        const refIds = (directProfiles || []).map((p) => p.id);
         if (refIds.length > 0) {
           const { data: approvedTxs } = await this.client
             .from('transactions')
@@ -653,30 +730,43 @@ class AuthService {
             .eq('status', 'completed');
 
           const totalDeposits = (approvedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
-          totalCommission = Math.round(totalDeposits * 0.20);
+          const liveCommission = Math.round(totalDeposits * 0.20);
+          if (liveCommission > totalCommissionUGX) {
+            totalCommissionUGX = liveCommission;
+          }
         }
 
-        const { data: claimedTxs } = await this.client
-          .from('transactions')
-          .select('amount_ugx')
-          .eq('user_id', this.currentUser.id)
-          .eq('status', 'completed')
-          .in('type', ['bonus', 'reward'])
-          .or('description.ilike.%referral commission%,id.like.tx_claim_ref_%,id.like.tx_refcomm_%');
+        // Get claimed commission directly
+        if (this.currentUser) {
+          const { data: claimedTxs } = await this.client
+            .from('transactions')
+            .select('amount_ugx')
+            .eq('user_id', this.currentUser.id)
+            .eq('status', 'completed')
+            .or('description.ilike.%referral commission%,id.like.tx_claim_ref_%,id.like.tx_refcomm_%');
 
-        const claimedCommission = (claimedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
-        const availableCommission = Math.max(0, totalCommission - claimedCommission);
+          const directClaimed = (claimedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
+          if (directClaimed > claimedCommissionUGX) {
+            claimedCommissionUGX = directClaimed;
+          }
+        }
 
-        return {
-          totalReferrals,
-          availableCommissionUGX: availableCommission,
-          totalCommissionUGX: totalCommission,
-          claimedCommissionUGX: claimedCommission,
-          referralCode: refCode,
-        };
+        availableCommissionUGX = Math.max(0, totalCommissionUGX - claimedCommissionUGX);
+
+        // Keep local profile stats in sync
+        if (this.currentUser) {
+          this.currentUser.referralCount = totalReferrals;
+          this.currentUser.referralEarningsUGX = totalCommissionUGX;
+        }
       }
 
-      return defaultSummary;
+      return {
+        totalReferrals,
+        availableCommissionUGX,
+        totalCommissionUGX,
+        claimedCommissionUGX,
+        referralCode: referralCode || activeCode,
+      };
     } catch (e) {
       console.warn('getReferralSummary error:', e);
       return defaultSummary;
@@ -684,39 +774,67 @@ class AuthService {
   }
 
   /**
-   * Load real referred users list from Supabase RPC get_referred_users()
+   * Load real referred users list from Supabase.
    * Returns username, registration date, approved deposit amount, and 20% commission earned.
    */
-  public async getReferredUsers(): Promise<ReferralPartner[]> {
-    if (!this.client || !this.currentUser) return [];
-    const refCode = this.currentUser.referralCode;
-    if (!refCode) return [];
+  public async getReferredUsers(overrideRefCode?: string): Promise<ReferralPartner[]> {
+    if (!this.client) return [];
+    const rawCode = overrideRefCode || this.currentUser?.referralCode;
+    const refCode = cleanReferralCode(rawCode);
 
     try {
-      // 1. Primary: Call Supabase RPC get_referred_users
-      const { data, error } = await this.client.rpc('get_referred_users');
-      if (!error && Array.isArray(data)) {
-        return data.map((r: any) => ({
-          id: String(r.id || ''),
-          username: String(r.username || 'user'),
-          fullName: r.full_name ? String(r.full_name) : undefined,
-          registeredDate: String(r.registered_date || ''),
-          status: (r.status === 'active' ? 'active' : 'pending') as 'active' | 'pending',
-          approvedDepositUGX: Number(r.approved_deposit_ugx ?? 0),
-          commissionUGX: Number(r.commission_ugx ?? 0),
-          commissionStatus: String(r.commission_status || (Number(r.approved_deposit_ugx) > 0 ? 'approved' : 'no_approved_deposit')),
-          rewardUGX: Number(r.commission_ugx ?? 0),
-        }));
+      // 1. Primary: Call Supabase RPC get_my_referrals
+      let listRes = await this.client.rpc('get_my_referrals');
+      if (listRes.error || !Array.isArray(listRes.data)) {
+        listRes = await this.client.rpc('get_referred_users');
       }
 
-      // 2. Direct Supabase Query Fallback
+      if (!listRes.error && Array.isArray(listRes.data) && listRes.data.length > 0) {
+        return listRes.data.map((r: any) => {
+          const id = String(r.referred_user_id || r.id || '');
+          const username = String(r.username || 'user');
+          const fullName = r.full_name ? String(r.full_name) : undefined;
+          let registeredDate = '';
+          if (r.joined_at) {
+            try {
+              registeredDate = new Date(r.joined_at).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              });
+            } catch {
+              registeredDate = String(r.joined_at);
+            }
+          } else if (r.registered_date) {
+            registeredDate = String(r.registered_date);
+          }
+          const approvedDeposit = Number(r.approved_deposit_ugx ?? 0);
+          const commission = Number(r.commission_ugx ?? 0);
+
+          return {
+            id,
+            username,
+            fullName,
+            registeredDate,
+            status: (r.status === 'active' || approvedDeposit > 0 ? 'active' : 'pending') as 'active' | 'pending',
+            approvedDepositUGX: approvedDeposit,
+            commissionUGX: commission,
+            commissionStatus: String(r.commission_status || (approvedDeposit > 0 ? 'approved' : 'no_approved_deposit')),
+            rewardUGX: commission,
+          };
+        });
+      }
+
+      // 2. Direct Supabase Query Fallback (checks both SC-CODE and bare CODE)
+      if (!refCode) return [];
+      const bareCode = refCode.replace(/^SC-/, '');
       const { data: profiles, error: pError } = await this.client
         .from('profiles')
         .select('id, username, full_name, created_at, status')
-        .ilike('referred_by', refCode.trim())
+        .or(`referred_by.ilike.${refCode},referred_by.ilike.${bareCode}`)
         .order('created_at', { ascending: false });
 
-      if (pError || !profiles) return [];
+      if (pError || !profiles || profiles.length === 0) return [];
 
       const refIds = profiles.map((p) => p.id);
       let approvedDepositsByUserId: Record<string, number> = {};
@@ -758,6 +876,134 @@ class AuthService {
   }
 
   /**
+   * Retroactively link an inviter referral code if the user missed it at signup.
+   * Connects the accounts in public.profiles, updates referrer's referral count,
+   * and credits any pending deposit commissions to the inviter.
+   */
+  public async linkReferrer(rawReferralCode: string): Promise<{
+    success: boolean;
+    message: string;
+    referrerUsername?: string;
+  }> {
+    const sb = this.client;
+    if (!sb || !this.currentUser) {
+      return { success: false, message: 'Please sign in to link your inviter.' };
+    }
+
+    const cleanCode = cleanReferralCode(rawReferralCode);
+    if (!cleanCode) {
+      return { success: false, message: 'Please enter a valid referral code (e.g. SC-B35B2A).' };
+    }
+
+    // Cannot refer oneself
+    if (this.currentUser.referralCode && this.currentUser.referralCode.toUpperCase() === cleanCode.toUpperCase()) {
+      return { success: false, message: 'You cannot use your own referral code as your inviter.' };
+    }
+
+    // Retrieve user's current profile
+    const { data: myProfile, error: myErr } = await sb
+      .from('profiles')
+      .select('id, referred_by, username')
+      .eq('id', this.currentUser.id)
+      .single();
+
+    if (myErr || !myProfile) {
+      return { success: false, message: 'Unable to load profile. Please try again.' };
+    }
+
+    if (myProfile.referred_by && myProfile.referred_by.trim() && myProfile.referred_by !== 'SC-SOLNOVA') {
+      return {
+        success: false,
+        message: `Your account is already linked to inviter code ${myProfile.referred_by}.`,
+      };
+    }
+
+    // Find the referrer profile by code (case-insensitive)
+    const bareCode = cleanCode.replace(/^SC-/, '');
+    const { data: referrer, error: refErr } = await sb
+      .from('profiles')
+      .select('id, username, referral_code, referral_count, referral_earnings_ugx')
+      .or(`referral_code.ilike.${cleanCode},referral_code.ilike.${bareCode}`)
+      .maybeSingle();
+
+    if (refErr || !referrer) {
+      return {
+        success: false,
+        message: `Referral code "${cleanCode}" was not found. Please verify the code with your inviter.`,
+      };
+    }
+
+    if (referrer.id === this.currentUser.id) {
+      return { success: false, message: 'You cannot use your own referral code as your inviter.' };
+    }
+
+    // 1. Update this user's referred_by
+    const { error: updErr } = await sb
+      .from('profiles')
+      .update({
+        referred_by: referrer.referral_code,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', this.currentUser.id);
+
+    if (updErr) {
+      return { success: false, message: `Failed to link referrer: ${updErr.message}` };
+    }
+
+    this.currentUser.referredBy = referrer.referral_code;
+
+    // 2. Sync referrer's referral_count and calculate any commissions on approved deposits
+    try {
+      const { data: allChildren } = await sb
+        .from('profiles')
+        .select('id')
+        .or(`referred_by.ilike.${referrer.referral_code},referred_by.ilike.${referrer.referral_code.replace(/^SC-/, '')}`);
+
+      const newCount = allChildren?.length || (Number(referrer.referral_count || 0) + 1);
+
+      // Check if this user has approved deposits to credit commission
+      const { data: myDeposits } = await sb
+        .from('transactions')
+        .select('amount_ugx')
+        .eq('user_id', this.currentUser.id)
+        .eq('type', 'deposit')
+        .eq('status', 'completed');
+
+      const totalDep = (myDeposits || []).reduce((sum, d) => sum + (Number(d.amount_ugx) || 0), 0);
+      const earnedComm = Math.round(totalDep * 0.20);
+      const prevEarnings = Number(referrer.referral_earnings_ugx || 0);
+
+      await sb
+        .from('profiles')
+        .update({
+          referral_count: newCount,
+          referral_earnings_ugx: prevEarnings + earnedComm,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', referrer.id);
+
+      // Send in-app notification to the inviter
+      await sb.from('notifications').insert({
+        id: `notif_reflink_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        user_id: referrer.id,
+        title: 'New Referral Partner Connected!',
+        message: `@${this.currentUser.username || 'A friend'} linked your referral code (${referrer.referral_code}). Your team now has ${newCount} partners!`,
+        read: false,
+        type: 'success',
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Post-link sync warning:', e);
+    }
+
+    return {
+      success: true,
+      message: `Successfully connected to inviter @${referrer.username}!`,
+      referrerUsername: referrer.username,
+    };
+  }
+
+  /**
    * Claim available referral commission atomically via Supabase RPC claim_referral_commission()
    * Moves available commission to total_balance_ugx in wallets table.
    */
@@ -776,6 +1022,13 @@ class AuthService {
       // 1. Primary: Call Supabase RPC claim_referral_commission
       const { data, error } = await this.client.rpc('claim_referral_commission');
       if (error) {
+        if (error.code === '23514' || error.message?.includes('transactions_type_check')) {
+          return {
+            success: false,
+            error:
+              'Database constraint: To claim commission, run this in Supabase SQL Editor: ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_check; ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (\'deposit\',\'withdraw\',\'reward\',\'investment\',\'transfer\',\'bonus\',\'adjustment\',\'referral_claim\'));',
+          };
+        }
         // Direct claim fallback if RPC not yet deployed in database
         return await this.claimReferralCommissionDirectFallback();
       }
@@ -1029,8 +1282,8 @@ class AuthService {
   /**
    * Helper to fetch referrals for profile loads
    */
-  private async fetchReferrals(_referralCode: string): Promise<ReferralPartner[]> {
-    return this.getReferredUsers();
+  private async fetchReferrals(referralCode: string): Promise<ReferralPartner[]> {
+    return this.getReferredUsers(referralCode);
   }
 
   public async processReferral(referralCode: string): Promise<{ applied: boolean; reason?: string; error?: string }> {

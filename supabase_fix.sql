@@ -15,7 +15,7 @@ ALTER TABLE public.transactions ADD CONSTRAINT transactions_status_check
   CHECK (status IN ('pending','completed','approved','rejected','cancelled'));
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_check
-  CHECK (type IN ('deposit','withdraw','reward','investment','transfer','bonus','adjustment'));
+  CHECK (type IN ('deposit','withdraw','reward','investment','transfer','bonus','adjustment','referral_claim'));
 
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'info';
 UPDATE public.notifications SET type='info' WHERE type IS NULL;

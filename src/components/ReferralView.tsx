@@ -15,7 +15,10 @@ import {
   RefreshCw,
   AlertCircle,
   Coins,
-  ArrowRight
+  ArrowRight,
+  Link2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { UserProfile, ReferralPartner, ReferralSummary } from '../types';
@@ -30,6 +33,7 @@ interface ReferralViewProps {
 
 export const ReferralView: React.FC<ReferralViewProps> = ({
   user,
+  onOpenAuth,
   onRefresh,
   onClaimSuccess,
 }) => {
@@ -47,9 +51,19 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [shareToast, setShareToast] = useState('');
 
-  const referralCode = summary?.referralCode || user?.referralCode || 'SC-SOLNOVA';
+  // Retroactive link inviter state
+  const [inviterInput, setInviterInput] = useState('');
+  const [isLinkingInviter, setIsLinkingInviter] = useState(false);
+  const [inviterFeedback, setInviterFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [showLinkSection, setShowLinkSection] = useState(false);
+
+  const referralCode = summary?.referralCode || user?.referralCode || '';
 
   const getReferralUrl = useCallback((): string => {
+    if (!referralCode) return '';
     if (typeof window === 'undefined') return `https://solnovacapital.com/?ref=${referralCode}`;
     const base = `${window.location.origin}${window.location.pathname}`;
     const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
@@ -59,7 +73,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
   const referralUrl = getReferralUrl();
 
   /**
-   * Fetch fresh referral data strictly from Supabase RPCs.
+   * Fetch fresh referral data strictly from Supabase RPCs and direct tables.
    * Supabase database is the single source of truth.
    */
   const loadReferralData = useCallback(async (isManualRefresh = false) => {
@@ -77,13 +91,18 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
       setSummary(freshSummary);
       setReferredUsers(freshUsers);
+
+      if (freshSummary && user) {
+        user.referralCount = Math.max(freshSummary.totalReferrals, freshUsers.length);
+        user.referralEarningsUGX = freshSummary.totalCommissionUGX;
+      }
     } catch (err) {
       console.warn('Failed to load referral data from Supabase:', err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   // Load data on mount and whenever the active user changes
   useEffect(() => {
@@ -94,6 +113,42 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
     await loadReferralData(true);
     if (onRefresh) {
       await onRefresh();
+    }
+  };
+
+  /**
+   * Retroactively connect to an inviter if user registered without referral code
+   */
+  const handleLinkInviter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = inviterInput.trim();
+    if (!clean || isLinkingInviter) return;
+
+    setIsLinkingInviter(true);
+    setInviterFeedback(null);
+
+    try {
+      const res = await supabaseAuth.linkReferrer(clean);
+      if (res.success) {
+        setInviterFeedback({ type: 'success', message: res.message });
+        setInviterInput('');
+        try {
+          confetti({ particleCount: 40, spread: 50 });
+        } catch {}
+        await loadReferralData(true);
+        if (onRefresh) {
+          await onRefresh();
+        }
+      } else {
+        setInviterFeedback({ type: 'error', message: res.message });
+      }
+    } catch (err: any) {
+      setInviterFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to connect inviter code.',
+      });
+    } finally {
+      setIsLinkingInviter(false);
     }
   };
 
@@ -204,10 +259,11 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
     }
   };
 
-  const totalReferralsCount = summary?.totalReferrals ?? user?.referralCount ?? 0;
-  const availableCommissionUGX = summary?.availableCommissionUGX ?? 0;
-  const totalCommissionUGX = summary?.totalCommissionUGX ?? user?.referralEarningsUGX ?? 0;
+  const totalReferralsCount = Math.max(summary?.totalReferrals ?? 0, referredUsers.length, user?.referralCount ?? 0);
+  const liveCommissionEarned = referredUsers.reduce((sum, u) => sum + (Number(u.commissionUGX) || 0), 0);
+  const totalCommissionUGX = Math.max(summary?.totalCommissionUGX ?? 0, liveCommissionEarned, user?.referralEarningsUGX ?? 0);
   const claimedCommissionUGX = summary?.claimedCommissionUGX ?? 0;
+  const availableCommissionUGX = Math.max(0, summary?.availableCommissionUGX ?? (totalCommissionUGX - claimedCommissionUGX));
 
   return (
     <div className="px-5 py-3 space-y-4 pb-10">
@@ -453,15 +509,91 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
         </div>
       </div>
 
+      {/* Link Inviter Card (Retroactive referral recovery) */}
+      <div className="bg-slate-50 rounded-3xl p-4 border border-slate-200/80 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+              <Link2 className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-[13px] font-black text-slate-900 leading-snug">
+                {user?.referredBy && user.referredBy !== 'SC-SOLNOVA'
+                  ? 'Your Linked Inviter'
+                  : 'Joined Without a Referral Code?'}
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                {user?.referredBy && user.referredBy !== 'SC-SOLNOVA'
+                  ? `Connected to Partner: ${user.referredBy}`
+                  : 'Link your friend’s referral code to join their partner team'}
+              </p>
+            </div>
+          </div>
+
+          {(!user?.referredBy || user.referredBy === 'SC-SOLNOVA') && (
+            <button
+              onClick={() => setShowLinkSection(!showLinkSection)}
+              className="px-2.5 py-1 text-blue-600 hover:text-blue-700 text-[11px] font-bold flex items-center gap-1 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+            >
+              <span>{showLinkSection ? 'Hide' : 'Link Now'}</span>
+              {showLinkSection ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
+
+        {showLinkSection && (!user?.referredBy || user.referredBy === 'SC-SOLNOVA') && (
+          <form onSubmit={handleLinkInviter} className="pt-2 border-t border-slate-200/70 space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={inviterInput}
+                onChange={(e) => setInviterInput(e.target.value.toUpperCase())}
+                placeholder="Enter Inviter Code (e.g. SC-B35B2A)"
+                className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <button
+                type="submit"
+                disabled={isLinkingInviter || !inviterInput.trim()}
+                className="px-4 py-2 bg-[#1657D9] hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isLinkingInviter ? 'Linking...' : 'Connect'}
+              </button>
+            </div>
+
+            {inviterFeedback && (
+              <div
+                className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                  inviterFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
+              >
+                {inviterFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                )}
+                <span>{inviterFeedback.message}</span>
+              </div>
+            )}
+          </form>
+        )}
+      </div>
+
       {/* REFERRED PARTNERS LIST (SUPABASE BACKEND INTEGRATION) */}
       <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[14.5px] font-extrabold text-slate-900 flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-emerald-600" /> Referred Partners ({referredUsers.length})
           </h3>
-          <span className="text-[11px] font-bold text-slate-400">
-            Supabase Live Data
-          </span>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Live Sync'}</span>
+          </button>
         </div>
 
         {isLoading ? (
@@ -487,14 +619,17 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {referredUsers.map((partner) => {
+            {referredUsers.map((partner, index) => {
               const approvedDeposit = Number(partner.approvedDepositUGX ?? 0);
               const commissionEarned = Number(partner.commissionUGX ?? 0);
               const hasDeposit = approvedDeposit > 0;
 
               return (
-                <div key={partner.id} className="py-3.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div key={partner.id || index} className="py-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-[11px] font-bold font-mono text-slate-400 shrink-0 w-5 text-right">
+                      #{index + 1}
+                    </span>
                     <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center shrink-0">
                       {partner.username.charAt(0).toUpperCase()}
                     </div>

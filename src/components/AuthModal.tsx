@@ -1,23 +1,67 @@
-import React, { useState } from 'react';
-import { X, Lock, User, KeyRound, Check, Gift, Users } from 'lucide-react';
-import { authService, UserAccountData } from '../services/supabaseAuth';
+import React, { useState, useEffect } from 'react';
+import { X, Lock, User, KeyRound, Check, Gift, Users, ShieldCheck } from 'lucide-react';
+import { authService, UserAccountData, cleanReferralCode } from '../services/supabaseAuth';
 import { UserProfile } from '../types';
 
 interface AuthModalProps {
   onClose: () => void;
   onAuthSuccess: (user: UserProfile, data?: UserAccountData) => void;
+  initialReferralCode?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) => {
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, initialReferralCode }) => {
+  const [tab, setTab] = useState<'signin' | 'signup'>(() => {
+    if (initialReferralCode) return 'signup';
+    if (typeof window !== 'undefined') {
+      try {
+        const search = new URLSearchParams(window.location.search);
+        if (search.get('ref') || search.get('referral')) return 'signup';
+      } catch {}
+    }
+    return 'signin';
+  });
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() => {
+    if (initialReferralCode) return cleanReferralCode(initialReferralCode);
+    if (typeof window !== 'undefined') {
+      try {
+        const search = new URLSearchParams(window.location.search);
+        const urlRef = search.get('ref') || search.get('referral');
+        if (urlRef) {
+          const cleaned = cleanReferralCode(urlRef);
+          if (cleaned) {
+            localStorage.setItem('pending_referral_code', cleaned);
+            return cleaned;
+          }
+        }
+        const cached = localStorage.getItem('pending_referral_code');
+        if (cached) return cleanReferralCode(cached);
+      } catch {}
+    }
+    return '';
+  });
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Sync if initialReferralCode changes
+  useEffect(() => {
+    if (initialReferralCode) {
+      const clean = cleanReferralCode(initialReferralCode);
+      if (clean) {
+        setReferralCode(clean);
+        setTab('signup');
+        try {
+          localStorage.setItem('pending_referral_code', clean);
+        } catch {}
+      }
+    }
+  }, [initialReferralCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,13 +282,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess }) 
 
             {tab === 'signup' && (
               <div>
-                <label className="text-[12px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-blue-600" /> Referral Code (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[12px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-blue-600" /> Referral Code (Optional)
+                  </label>
+                  {referralCode && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                      <ShieldCheck className="w-3 h-3" /> Inviter Linked
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                  onChange={(e) => setReferralCode(cleanReferralCode(e.target.value) || e.target.value.toUpperCase())}
                   placeholder="e.g. SC-8F3K9P"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />

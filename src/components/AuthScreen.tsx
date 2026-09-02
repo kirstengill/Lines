@@ -15,7 +15,7 @@ import {
   Users,
   Check
 } from 'lucide-react';
-import { authService, UserAccountData } from '../services/supabaseAuth';
+import { authService, UserAccountData, cleanReferralCode } from '../services/supabaseAuth';
 import { UserProfile } from '../types';
 
 interface AuthScreenProps {
@@ -29,7 +29,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   initialReferralCode = '',
   onAuthSuccess,
 }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialReferralCode ? 'signup' : initialMode);
+  const initialCleanRef = cleanReferralCode(initialReferralCode);
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialCleanRef ? 'signup' : initialMode);
 
   // Sign In Form States
   const [signInUsername, setSignInUsername] = useState('');
@@ -44,8 +45,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('');
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
-  const [referralCode, setReferralCode] = useState(initialReferralCode);
-  const [hasUrlReferral, setHasUrlReferral] = useState(Boolean(initialReferralCode));
+  const [referralCode, setReferralCode] = useState(initialCleanRef);
+  const [hasUrlReferral, setHasUrlReferral] = useState(Boolean(initialCleanRef));
   const [agreedTerms, setAgreedTerms] = useState(true);
 
   // General States
@@ -53,16 +54,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Extract referral code from URL query parameters (?ref=CODE)
+  // Extract referral code from URL query parameters (?ref=CODE) or localStorage
   useEffect(() => {
     try {
       const searchParams = new URLSearchParams(window.location.search);
-      const refParam = searchParams.get('ref') || searchParams.get('referral');
+      const refParam = searchParams.get('ref') || searchParams.get('referral') || localStorage.getItem('pending_referral_code');
       if (refParam) {
-        const cleanRef = refParam.trim().toUpperCase();
-        setReferralCode(cleanRef);
-        setHasUrlReferral(true);
-        setMode('signup');
+        const cleanRef = cleanReferralCode(refParam);
+        if (cleanRef) {
+          setReferralCode(cleanRef);
+          setHasUrlReferral(true);
+          setMode('signup');
+          localStorage.setItem('pending_referral_code', cleanRef);
+        }
       }
     } catch (e) {
       // Ignore URL parsing failure
@@ -137,12 +141,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setLoading(true);
 
     try {
+      const finalReferral = cleanReferralCode(referralCode);
       const res = await authService.signUp(
         cleanUsername,
         signUpPassword,
         (signUpFullName || cleanUsername).trim(),
         signUpPhone.trim() || undefined,
-        referralCode.trim()
+        finalReferral
       );
       if (res.error) {
         setErrorMsg(res.error);

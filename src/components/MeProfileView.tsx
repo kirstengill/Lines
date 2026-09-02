@@ -95,7 +95,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
             <p className="text-[11px] text-slate-600 mt-0.5">
               {user?.referralCount
                 ? `${user.referralCount} referrals • UGX ${(user.referralEarningsUGX || 0).toLocaleString()} earned`
-                : 'Invite friends and earn 15% of every approved deposit they make'}
+                : 'Invite friends and earn 20% of every approved deposit they make'}
             </p>
           </div>
         </div>
