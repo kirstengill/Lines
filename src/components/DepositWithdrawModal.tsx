@@ -23,7 +23,7 @@ import { WHATSAPP_HELP_URL } from '../constants/links';
 import { authService } from '../services/supabaseAuth';
 
 // Withdrawal rules
-const MIN_WITHDRAWAL_UGX = 4000;
+const MIN_WITHDRAWAL_UGX = 10000;
 const WITHDRAWAL_FEE_RATE = 0.15; // 15% standard transaction fee
 
 // Helper to calculate maximum receive amount after 15% fee from a given balance
@@ -521,7 +521,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                       : 'Withdrawal Amount (You Receive)'}
                   {mode === 'withdraw' && !isWelcomeBonus && (
                     <span className="ml-1.5 text-[10.5px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                      Min: UGX 4,000
+                      Min: UGX {MIN_WITHDRAWAL_UGX.toLocaleString()}
                     </span>
                   )}
                 </span>
@@ -538,7 +538,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   value={amountUGXStr}
                   disabled={isWelcomeBonus}
                   onChange={(e) => setAmountUGXStr(e.target.value)}
-                  placeholder={mode === 'deposit' ? '50000' : '4000'}
+                  placeholder={mode === 'deposit' ? '50000' : '10000'}
                   className={`w-full pl-12 pr-4 py-2.5 rounded-xl font-bold text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 font-mono ${
                     isWelcomeBonus
                       ? 'bg-emerald-50/50 border border-emerald-300 text-emerald-900 cursor-not-allowed'
@@ -596,7 +596,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               {!isWelcomeBonus && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {(mode === 'withdraw'
-                    ? [4000, 10000, 20000, 50000, 100000]
+                    ? [10000, 20000, 50000, 100000, 200000]
                     : [15000, 20000, 30000, 50000, 100000]
                   ).map((preset) => (
                     <button

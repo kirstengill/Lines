@@ -13,6 +13,7 @@ import {
   AppNotification,
   AdminUserSummary,
   BalanceAdjustment,
+  UserAccountData,
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -48,10 +49,11 @@ class ApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    // Only forward the REAL Supabase Auth session token.
-    // No x-user-id spoofing: identity always comes from the verified JWT.
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.userId) {
+      headers['x-user-id'] = this.userId;
     }
     return headers;
   }
@@ -85,12 +87,52 @@ class ApiClient {
   }
 
   // ==================== AUTHENTICATION ====================
-  // NOTE: All authentication (sign-in, sign-up, sign-out, session) is handled
-  // exclusively by Supabase Auth via src/services/supabaseAuth.ts.
-  // There is NO /api/auth/* fallback. The REST backend receives only the
-  // authenticated Supabase session token for application-data endpoints.
+  public async signIn(username: string, password: string): Promise<{ user?: UserProfile; data?: UserAccountData; token?: string; isAdmin?: boolean; isBlocked?: boolean; error?: string }> {
+    const res = await this.request<any>('/api/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    return {
+      user: res.user,
+      data: res.data,
+      token: res.token,
+      isAdmin: res.isAdmin,
+      isBlocked: res.isBlocked,
+      error: res.error,
+    };
+  }
+
+  public async signUp(username: string, password: string, fullName?: string, phone?: string, referralCode?: string): Promise<{ user?: UserProfile; data?: UserAccountData; token?: string; isAdmin?: boolean; error?: string }> {
+    const res = await this.request<any>('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, fullName, phone, referralCode }),
+    });
+    return {
+      user: res.user,
+      data: res.data,
+      token: res.token,
+      isAdmin: res.isAdmin,
+      error: res.error,
+    };
+  }
+
+  public async getSessionUser(): Promise<{ user?: UserProfile; data?: UserAccountData; isAdmin?: boolean; isBlocked?: boolean; error?: string }> {
+    const res = await this.request<any>('/api/auth/me', {
+      method: 'GET',
+    });
+    return {
+      user: res.user,
+      data: res.data,
+      isAdmin: res.isAdmin,
+      isBlocked: res.isBlocked,
+      error: res.error,
+    };
+  }
 
   public async signOut() {
+    try {
+      await this.request('/api/auth/signout', { method: 'POST' });
+    } catch {}
     this.setSession(null, null);
   }
 
@@ -169,6 +211,12 @@ class ApiClient {
 
   public async fetchPendingTransactions() {
     return this.request<{ transactions: Transaction[] }>('/api/admin/pending-transactions', {
+      method: 'GET',
+    });
+  }
+
+  public async fetchAllTransactions() {
+    return this.request<{ transactions: Transaction[] }>('/api/admin/transactions', {
       method: 'GET',
     });
   }

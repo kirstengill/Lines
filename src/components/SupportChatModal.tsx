@@ -44,7 +44,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     setIsTyping(true);
 
     setTimeout(() => {
-      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 4,000), or join our official WhatsApp Helpdesk & Community.";
+      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 10,000), or join our official WhatsApp Helpdesk & Community.";
 
       const lower = text.toLowerCase();
 
@@ -84,7 +84,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
       } else if (lower.includes('withdraw') || lower.includes('cash out') || lower.includes('fee') || lower.includes('minimum')) {
         reply = "Withdrawal Guidelines:\n\n" +
           "• Welcome Bonus: UGX 4,000 withdrawable at 0% transaction fee once you make any deposit and it is approved by the admin!\n" +
-          "• Minimum Standard Withdrawal: UGX 4,000.\n" +
+          "• Minimum Standard Withdrawal: UGX 10,000.\n" +
           "• Standard Transaction Fee: 15% processing fee.\n" +
           "• Channels: MTN MoMo, Airtel Money, or Stanbic Bank.\n" +
           "• Approvals: Requests are reviewed by administrators and dispatched directly to your mobile money number or bank account.";

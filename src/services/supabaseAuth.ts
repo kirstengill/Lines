@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { supabaseAdmin } from './supabaseAdmin';
 import { getSupabaseClient } from './supabase';
+import { apiClient } from './apiClient';
 
 export interface UserAccountData {
   wallet: WalletState;
@@ -140,10 +141,13 @@ class AuthService {
   public setCurrentUser(user: UserProfile | null, accessToken?: string | null) {
     this.currentUser = user;
     if (user) {
-      // REST data endpoints receive the real Supabase Auth session token
-
+      if (accessToken !== undefined) {
+        this.accessToken = accessToken;
+      }
+      apiClient.setSession(this.accessToken, user.id);
     } else {
-
+      this.accessToken = null;
+      apiClient.setSession(null, null);
     }
   }
 
@@ -177,36 +181,42 @@ class AuthService {
   // ==========================================================
 
   public async restoreSession(): Promise<{ user: UserProfile | null; data: UserAccountData | null; error?: string }> {
-    if (!this.client) {
-      return { user: null, data: null, error: 'Authentication service is not configured.' };
+    if (this.client) {
+      try {
+        const { data: { session }, error: sessionErr } = await this.client.auth.getSession();
+        if (!sessionErr && session && session.user) {
+          const user = session.user;
+          const profile = await this.fetchProfileFromSupabase(user);
+          if (profile) {
+            this.setCurrentUser(profile, session.access_token);
+            const dataRes = await this.refreshUserData();
+            return { user: profile, data: dataRes.data || null };
+          }
+        }
+      } catch (err) {
+        console.warn('Session restore exception from Supabase:', err);
+      }
     }
 
+    // Fallback: check local storage token for standalone / offline Express server mode
     try {
-      const { data: { session }, error: sessionErr } = await this.client.auth.getSession();
-      if (sessionErr || !session || !session.user) {
-        this.currentUser = null;
-        return { user: null, data: null };
+      const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('solnova_session_token') : null;
+      const storedUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('solnova_session_user_id') : null;
+      if (storedToken && storedUserId) {
+        apiClient.setSession(storedToken, storedUserId);
+        const meRes = await apiClient.getSessionUser();
+        if (meRes.user && meRes.data) {
+          this.setCurrentUser(meRes.user, storedToken);
+          this.memoryUserData[meRes.user.id] = meRes.data;
+          return { user: meRes.user, data: meRes.data };
+        }
       }
-
-      const user = session.user;
-      const profile = await this.fetchProfileFromSupabase(user);
-      if (!profile) {
-        // No matching public.profiles row for this auth.uid(): refuse silently-broken sessions.
-        console.warn('restoreSession: no profile row found for', user.id);
-        await this.client.auth.signOut();
-        this.currentUser = null;
-        return { user: null, data: null, error: 'Signed-in account has no profile record. Please contact support.' };
-      }
-
-      this.setCurrentUser(profile, session.access_token);
-
-      const dataRes = await this.refreshUserData();
-      return { user: profile, data: dataRes.data || null };
-    } catch (err) {
-      console.warn('Session restore exception:', err);
-      this.currentUser = null;
-      return { user: null, data: null };
+    } catch (e) {
+      // no session
     }
+
+    this.currentUser = null;
+    return { user: null, data: null };
   }
 
   // ==========================================================
@@ -219,52 +229,75 @@ class AuthService {
     error?: string;
     isBlocked?: boolean;
   }> {
-    if (!this.client) {
-      return { error: 'Authentication service is not configured.' };
-    }
-
     const cleanInput = (usernameOrEmail || '').trim();
     if (!cleanInput || !password) {
       return { error: 'Username/Email and password are required.' };
     }
 
-    const email = this.formatEmail(cleanInput);
+    // 1. Try Supabase Auth if client is configured
+    if (this.client) {
+      try {
+        const email = this.formatEmail(cleanInput);
+        const { data: authData, error: authError } = await this.client.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-    // Single authentication path: Supabase Auth
-    const { data: authData, error: authError } = await this.client.auth.signInWithPassword({
-      email,
-      password,
-    });
+        if (!authError && authData.user && authData.session) {
+          const profile = await this.fetchProfileFromSupabase(authData.user);
+          if (!profile) {
+            await this.client.auth.signOut();
+            return { error: 'Signed in, but no profile record was found for your account. Please contact support.' };
+          }
 
-    if (authError || !authData.user || !authData.session) {
-      return { error: this.mapAuthError(authError) };
+          if (profile.status === 'blocked') {
+            await this.client.auth.signOut();
+            this.currentUser = null;
+            return { error: 'Your account has been suspended by an administrator.', isBlocked: true };
+          }
+
+          this.setCurrentUser(profile, authData.session.access_token);
+
+          const dataRes = await this.refreshUserData();
+          const accountData = dataRes.data || {
+            wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+            transactions: [],
+            machines: [],
+            adminTasks: [],
+            notifications: [],
+          };
+
+          this.memoryUserData[profile.id] = accountData;
+          return { user: profile, data: accountData };
+        }
+      } catch (err) {
+        console.warn('Supabase sign-in error, trying server fallback:', err);
+      }
     }
 
-    const profile = await this.fetchProfileFromSupabase(authData.user);
-    if (!profile) {
-      await this.client.auth.signOut();
-      return { error: 'Signed in, but no profile record was found for your account. Please contact support.' };
+    // 2. Fallback to Express backend
+    const serverRes = await apiClient.signIn(cleanInput, password);
+    if (serverRes.error || !serverRes.user) {
+      return { error: serverRes.error || 'Invalid username or password.', isBlocked: serverRes.isBlocked };
     }
 
-    if (profile.status === 'blocked') {
-      await this.client.auth.signOut();
-      this.currentUser = null;
-      return { error: 'Your account has been suspended by an administrator.', isBlocked: true };
+    this.setCurrentUser(serverRes.user, serverRes.token);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('solnova_session_token', serverRes.token);
+        localStorage.setItem('solnova_session_user_id', serverRes.user.id);
+      } catch {}
     }
 
-    this.setCurrentUser(profile, authData.session.access_token);
-
-    const dataRes = await this.refreshUserData();
-    const accountData = dataRes.data || {
-      wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+    const accountData = serverRes.data || {
+      wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
       notifications: [],
     };
-
-    this.memoryUserData[profile.id] = accountData;
-    return { user: profile, data: accountData };
+    this.memoryUserData[serverRes.user.id] = accountData;
+    return { user: serverRes.user, data: accountData };
   }
 
   public async signUp(
@@ -279,119 +312,103 @@ class AuthService {
     error?: string;
     needsConfirmation?: boolean;
   }> {
-    if (!this.client) {
-      return { error: 'Authentication service is not configured.' };
-    }
-
     // Same normalization as sign-in: trim -> lowercase -> sanitize
     const cleanUsername = this.normalizeUsername(username);
     if (!cleanUsername) {
       return { error: 'Username is required.' };
     }
-    const email = `${cleanUsername}@sunrise-ds.com`;
-
     const cleanRef = cleanReferralCode(referralCode);
 
-    // Single authentication path: Supabase Auth.
-    // NEVER submit is_admin/role in metadata: new users are always normal users.
-    const { data: authData, error: authError } = await this.client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username: cleanUsername,
-          full_name: (fullName || cleanUsername).trim(),
-          phone: phone || '',
-          referred_by: cleanRef,
-        },
-      },
-    });
-
-    if (authError) {
-      const msg = (authError.message || '').toLowerCase();
-      if (msg.includes('already registered') || msg.includes('already exists')) {
-        return { error: 'This username is already taken. Please choose another one.' };
-      }
-      if (authError.code === 'user_banned') {
-        return { error: 'This account has been blocked.' };
-      }
-      return { error: authError.message || 'Sign up failed. Please try again.' };
-    }
-
-    if (!authData.user) {
-      return { error: 'Failed to create user account.' };
-    }
-
-    // If email confirmation is enabled, no session is returned yet.
-    if (!authData.session) {
-      return {
-        needsConfirmation: true,
-        error:
-          'Account created! Please confirm your account before signing in.',
-      };
-    }
-
-    // Process referral (link profiles, credit referrer, record tx + notification).
-    // Safe to call repeatedly: the DB function is idempotent per new user.
-    if (cleanRef) {
+    // 1. Try Supabase Auth if client is configured
+    if (this.client) {
       try {
-        const refRes = await this.processReferral(cleanRef);
-        if (!refRes.applied && refRes.reason && refRes.reason !== 'no_code' && refRes.reason !== 'already_processed') {
-          console.warn('Referral not applied:', refRes.reason);
+        const email = `${cleanUsername}@sunrise-ds.com`;
+        const { data: authData, error: authError } = await this.client.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: cleanUsername,
+              full_name: (fullName || cleanUsername).trim(),
+              phone: phone || '',
+              referred_by: cleanRef,
+            },
+          },
+        });
+
+        if (authError) {
+          const msg = (authError.message || '').toLowerCase();
+          if (msg.includes('already registered') || msg.includes('already exists')) {
+            return { error: 'This username is already taken. Please choose another one.' };
+          }
+          if (authError.code === 'user_banned') {
+            return { error: 'This account has been blocked.' };
+          }
+        } else if (authData.user) {
+          if (!authData.session) {
+            return {
+              needsConfirmation: true,
+              error: 'Account created! Please confirm your account before signing in.',
+            };
+          }
+
+          if (cleanRef) {
+            try {
+              await this.processReferral(cleanRef);
+            } catch (e) {
+              console.warn('Referral processing warning:', e);
+            }
+          }
+
+          let profile = await this.fetchProfileFromSupabase(authData.user);
+          if (!profile && this.client) {
+            for (let i = 0; i < 5 && !profile; i++) {
+              await new Promise((r) => setTimeout(r, 400));
+              profile = await this.fetchProfileFromSupabase(authData.user);
+            }
+          }
+          if (profile) {
+            this.setCurrentUser(profile, authData.session.access_token);
+            const dataRes = await this.refreshUserData();
+            const userData = dataRes.data || {
+              wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+              transactions: [],
+              machines: [],
+              adminTasks: [],
+              notifications: [],
+            };
+            this.memoryUserData[profile.id] = userData;
+            return { user: profile, data: userData };
+          }
         }
-
-        // Sync referrer's referral_count in profiles
-        const { data: refParent } = await this.client
-          .from('profiles')
-          .select('id, referral_count')
-          .ilike('referral_code', cleanRef)
-          .maybeSingle();
-
-        if (refParent) {
-          const { count } = await this.client
-            .from('profiles')
-            .select('id', { count: 'exact', head: true })
-            .ilike('referred_by', cleanRef);
-
-          await this.client
-            .from('profiles')
-            .update({
-              referral_count: count || ((Number(refParent.referral_count) || 0) + 1),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', refParent.id);
-        }
-      } catch (e) {
-        console.warn('Referral processing warning:', e);
+      } catch (err) {
+        console.warn('Supabase sign-up error, trying server fallback:', err);
       }
     }
 
-    // Profile + wallet + welcome bonus are auto-created by the on_auth_user_created DB trigger.
-    let profile = await this.fetchProfileFromSupabase(authData.user);
-    if (!profile && this.client) {
-      // Trigger may complete asynchronously; retry briefly.
-      for (let i = 0; i < 5 && !profile; i++) {
-        await new Promise((r) => setTimeout(r, 400));
-        profile = await this.fetchProfileFromSupabase(authData.user);
-      }
-    }
-    if (!profile) {
-      await this.client.auth.signOut();
-      return { error: 'Account created but the profile record could not be loaded. Please contact support.' };
+    // 2. Fallback to Express backend
+    const serverRes = await apiClient.signUp(cleanUsername, password, (fullName || cleanUsername).trim(), phone, cleanRef);
+    if (serverRes.error || !serverRes.user) {
+      return { error: serverRes.error || 'Sign up failed. Please try again.' };
     }
 
-    this.setCurrentUser(profile, authData.session.access_token);
+    this.setCurrentUser(serverRes.user, serverRes.token);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('solnova_session_token', serverRes.token);
+        localStorage.setItem('solnova_session_user_id', serverRes.user.id);
+      } catch {}
+    }
 
-    const dataRes = await this.refreshUserData();
-    const userData = dataRes.data || {
-      wallet: { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+    const userData = serverRes.data || {
+      wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
       notifications: [],
     };
-    this.memoryUserData[profile.id] = userData;
-    return { user: profile, data: userData };
+    this.memoryUserData[serverRes.user.id] = userData;
+    return { user: serverRes.user, data: userData };
   }
 
   /**
@@ -412,6 +429,13 @@ class AuthService {
       } catch {
         // Ignore signout error
       }
+    }
+    await apiClient.signOut();
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('solnova_session_token');
+        localStorage.removeItem('solnova_session_user_id');
+      } catch {}
     }
 
     this.currentUser = null;
@@ -634,10 +658,31 @@ class AuthService {
       }
     }
 
+    // 2. Fallback to Express backend data
+    try {
+      const serverRes = await apiClient.fetchUserData();
+      if (serverRes && !serverRes.error && serverRes.user) {
+        this.currentUser = serverRes.user;
+        const userData: UserAccountData = serverRes.data || {
+          wallet: serverRes.wallet || { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+          transactions: serverRes.transactions || [],
+          machines: serverRes.machines || [],
+          adminTasks: serverRes.adminTasks || [],
+          notifications: serverRes.notifications || [],
+        };
+        this.memoryUserData[userId] = userData;
+        return {
+          user: this.currentUser,
+          data: userData,
+          isBlocked: this.currentUser.status === 'blocked',
+        };
+      }
+    } catch {}
+
     return {
       user: this.currentUser,
       data: this.memoryUserData[userId] || null,
-      isBlocked: this.currentUser.status === 'blocked',
+      isBlocked: this.currentUser?.status === 'blocked',
     };
   }
 

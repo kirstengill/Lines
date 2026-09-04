@@ -14,6 +14,7 @@ import {
   Machine,
 } from '../types';
 import { AVAILABLE_CATALOG } from '../data/initialData';
+import { apiClient } from './apiClient';
 
 export interface SubmitTransactionInput {
   type: 'deposit' | 'withdraw';
@@ -27,11 +28,19 @@ export const supabaseAdmin = {
   // ---------- USER SUBMITS DEPOSIT / WITHDRAW -> pending row in Supabase ----------
   async submitTransaction(input: SubmitTransactionInput): Promise<{ success: boolean; transaction?: Transaction; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
-
     const numericAmount = Number(input.amountUGX);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       return { success: false, error: 'Please enter a valid numeric amount greater than 0.' };
+    }
+
+    if (!sb) {
+      if (input.type === 'deposit') {
+        const res = await apiClient.submitDeposit(numericAmount, input.paymentMethod || 'Manual', input.recipientInfo);
+        return { success: !res.error, transaction: res.transaction, error: res.error };
+      } else {
+        const res = await apiClient.submitWithdrawal(numericAmount, input.paymentMethod || 'Manual', input.recipientInfo || '');
+        return { success: !res.error, transaction: res.transaction, error: res.error };
+      }
     }
 
     try {
@@ -99,7 +108,7 @@ export const supabaseAdmin = {
 
       // Check balance and minimum for withdrawals
       if (input.type === 'withdraw') {
-        const MIN_WITHDRAWAL_UGX = 4000;
+        const MIN_WITHDRAWAL_UGX = 10000;
         if (numericAmount < MIN_WITHDRAWAL_UGX) {
           return {
             success: false,
@@ -224,8 +233,6 @@ export const supabaseAdmin = {
     amountUGX?: number
   ): Promise<{ success: boolean; investment?: any; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
-
     const machineObj: Partial<Machine> =
       typeof machineOrId === 'string'
         ? { id: machineOrId, minInvestUGX: amountUGX }
@@ -234,6 +241,16 @@ export const supabaseAdmin = {
     const cost = Number(machineObj.minInvestUGX || amountUGX || 0);
     if (!cost || cost <= 0) {
       return { success: false, error: 'Invalid investment machine amount.' };
+    }
+
+    if (!sb) {
+      const res = await apiClient.buyInvestment(machineOrId, cost);
+      return {
+        success: !res.error,
+        investment: res.investment,
+        newBalance: res.wallet?.totalBalanceUGX,
+        error: res.error,
+      };
     }
 
     try {
@@ -275,7 +292,10 @@ export const supabaseAdmin = {
   // ---------- CLAIM INVESTMENT YIELD (atomic via claim_reward RPC) ----------
   async claimInvestmentYield(userMachineId: string): Promise<{ success: boolean; claimedUGX?: number; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.claimInvestmentYield(userMachineId);
+      return { success: !res.error, claimedUGX: res.claimedUGX, newBalance: res.wallet?.totalBalanceUGX, error: res.error };
+    }
 
     try {
       const { data, error } = await sb.rpc('claim_reward', { p_user_machine_id: userMachineId });
@@ -368,7 +388,8 @@ export const supabaseAdmin = {
   async fetchCatalogMachines(): Promise<{ machines: Machine[]; error?: string }> {
     const sb = getSupabaseClient();
     if (!sb) {
-      return { machines: AVAILABLE_CATALOG };
+      const res = await apiClient.fetchCatalogMachines();
+      return { machines: res.machines && res.machines.length > 0 ? res.machines : AVAILABLE_CATALOG };
     }
 
     try {
@@ -513,7 +534,10 @@ export const supabaseAdmin = {
 
   async createCatalogMachine(machine: Partial<Machine>): Promise<{ success: boolean; machine?: Machine; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.createCatalogMachine(machine);
+      return { success: !res.error, machine: res.machine, error: res.error };
+    }
 
     const machineId = machine.id || `mach_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const cost = Math.round(Number(machine.minInvestUGX || 0));
@@ -574,7 +598,10 @@ export const supabaseAdmin = {
 
   async updateCatalogMachine(id: string, machine: Partial<Machine>): Promise<{ success: boolean; machine?: Machine; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.updateCatalogMachine(id, machine);
+      return { success: !res.error, machine: res.machine, error: res.error };
+    }
 
     const updatePayload: any = {};
     if (machine.title !== undefined) updatePayload.title = machine.title.trim();
@@ -630,7 +657,10 @@ export const supabaseAdmin = {
 
   async deleteCatalogMachine(id: string): Promise<{ success: boolean; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.deleteCatalogMachine(id);
+      return { success: !res.error, error: res.error };
+    }
 
     try {
       const { error } = await sb.from('catalog_machines').delete().eq('id', id);
@@ -644,7 +674,10 @@ export const supabaseAdmin = {
   // ---------- ADMIN: PENDING TRANSACTIONS ----------
   async fetchPendingTransactions(): Promise<{ transactions: Transaction[]; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { transactions: [], error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.fetchPendingTransactions();
+      return { transactions: res.transactions || [], error: res.error };
+    }
 
     const { data, error } = await sb.rpc('admin_pending_transactions');
     if (error) return { transactions: [], error: translate(error.message) };
@@ -678,7 +711,10 @@ export const supabaseAdmin = {
   // ---------- ADMIN: ALL TRANSACTIONS (WITH STATUSES & PROFILES) ----------
   async fetchAllTransactions(): Promise<{ transactions: Transaction[]; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { transactions: [], error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.fetchAllTransactions();
+      return { transactions: res.transactions || [], error: res.error };
+    }
 
     try {
       // 1. Try security-definer RPC admin_all_transactions first
@@ -767,7 +803,10 @@ export const supabaseAdmin = {
   // ---------- ADMIN: APPROVE / REJECT ----------
   async approveTransaction(txId: string): Promise<{ success: boolean; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.approveTransaction(txId);
+      return { success: !res.error, newBalance: res.updatedUserBalance, error: res.error };
+    }
 
     try {
       const { data, error } = await sb.rpc('admin_approve_transaction', { p_transaction_id: txId });
@@ -837,7 +876,10 @@ export const supabaseAdmin = {
 
   async rejectTransaction(txId: string): Promise<{ success: boolean; balance?: number; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.rejectTransaction(txId);
+      return { success: !res.error, error: res.error };
+    }
 
     try {
       const { data, error } = await sb.rpc('admin_reject_transaction', { p_transaction_id: txId });
@@ -856,7 +898,9 @@ export const supabaseAdmin = {
   // ---------- ADMIN: USERS (from Supabase Auth + profiles + wallets) ----------
   async fetchAdminUsers(): Promise<{ users: AdminUserSummary[]; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { users: [], error: 'Database not configured' };
+    if (!sb) {
+      return apiClient.fetchAdminUsers();
+    }
 
     try {
       const { data, error } = await sb.rpc('admin_list_users');
@@ -967,7 +1011,10 @@ export const supabaseAdmin = {
     data: { username?: string; fullName?: string; phone?: string; status?: 'active' | 'blocked' }
   ): Promise<{ success: boolean; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.updateAdminUser(userId, data);
+      return { success: !res.error, error: res.error };
+    }
 
     const { error } = await sb.rpc('admin_update_user', {
       p_user_id: userId,
@@ -986,7 +1033,10 @@ export const supabaseAdmin = {
     adjustment: { amountUGX: number; type: 'add' | 'deduct'; reason: string }
   ): Promise<{ success: boolean; previousBalance?: number; newBalance?: number; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { success: false, error: 'Database not configured' };
+    if (!sb) {
+      const res = await apiClient.adjustUserBalance(userId, adjustment);
+      return { success: !res.error, previousBalance: res.previousBalance, newBalance: res.newBalance, error: res.error };
+    }
 
     try {
       const { data, error } = await sb.rpc('admin_adjust_balance', {
@@ -1122,7 +1172,9 @@ export const supabaseAdmin = {
   // ---------- ADMIN: AUDIT LOG ----------
   async fetchBalanceAdjustments(): Promise<{ adjustments: BalanceAdjustment[]; error?: string }> {
     const sb = getSupabaseClient();
-    if (!sb) return { adjustments: [], error: 'Database not configured' };
+    if (!sb) {
+      return apiClient.fetchBalanceAdjustments();
+    }
 
     const { data, error } = await sb
       .from('balance_adjustments')
