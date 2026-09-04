@@ -179,3 +179,11 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface UserAccountData {
+  wallet: WalletState;
+  transactions: Transaction[];
+  machines: Machine[];
+  adminTasks: AdminTask[];
+  notifications: AppNotification[];
+}
+

@@ -98,9 +98,148 @@ interface ServerUserStore {
   };
 }
 
-// Initial Database Stores
-const serverDatabase: ServerUserStore = {};
-const activeTokens: { [token: string]: string } = {}; // token -> userId
+// Initial Database Stores with default test users
+const defaultAdminId = '95bf6171-7258-49e6-b5aa-477c4266b9a4';
+const defaultUserId = 'usr_demo_solnova';
+
+const serverDatabase: ServerUserStore = {
+  [defaultAdminId]: {
+    user: {
+      id: defaultAdminId,
+      username: 'coolman',
+      passwordHash: 'TestPass123!',
+      fullName: 'Cool Man (Platform Admin)',
+      phone: '+256700000000',
+      status: 'active',
+      role: 'admin',
+      isAdmin: true,
+      tier: 'VIP 2 Elite',
+      referralCode: 'SC-ADMIN01',
+      referralCount: 3,
+      referralEarningsUGX: 120000,
+      referrals: [],
+      welcomeBonusClaimed: true,
+      memberSince: 'August 2026',
+      createdAt: new Date().toISOString(),
+    },
+    data: {
+      wallet: {
+        totalBalanceUGX: 25000000,
+        dailyPnlUGX: 250000,
+        activeMachinesCount: 2,
+        pendingTasksCount: 1,
+      },
+      transactions: [
+        {
+          id: 'tx_init_1',
+          userId: defaultAdminId,
+          username: 'coolman',
+          type: 'deposit',
+          amountUGX: 25000000,
+          currency: 'UGX',
+          status: 'completed',
+          date: new Date().toLocaleString(),
+          timestamp: Date.now(),
+          created_at: new Date().toISOString(),
+          description: 'Initial Capital Injection',
+          paymentMethod: 'Bank Transfer',
+        },
+      ],
+      machines: [],
+      adminTasks: [
+        {
+          id: 'task_init_1',
+          userId: defaultUserId,
+          title: 'Deposit Verification: UGX 50,000',
+          description: 'User demouser requested deposit of UGX 50,000 via MTN Mobile Money',
+          priority: 'high',
+          category: 'Deposit Verification',
+          type: 'deposit',
+          status: 'pending',
+          amountUGX: 50000,
+          date: new Date().toLocaleString(),
+          timestamp: Date.now(),
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      notifications: [
+        {
+          id: 'notif_init_1',
+          userId: defaultAdminId,
+          title: 'Welcome to SolNova Capital Admin',
+          message: 'You have administrator privileges to review transactions, manage catalog nodes, and adjust balances.',
+          type: 'system',
+          read: false,
+          date: 'Just now',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    },
+  },
+  [defaultUserId]: {
+    user: {
+      id: defaultUserId,
+      username: 'demouser',
+      passwordHash: 'TestPass123!',
+      fullName: 'Demo Investor',
+      phone: '+256711111111',
+      status: 'active',
+      role: 'user',
+      isAdmin: false,
+      tier: 'Standard',
+      referralCode: 'SC-DEMO01',
+      referralCount: 1,
+      referralEarningsUGX: 15000,
+      referrals: [],
+      welcomeBonusClaimed: true,
+      memberSince: 'August 2026',
+      createdAt: new Date().toISOString(),
+    },
+    data: {
+      wallet: {
+        totalBalanceUGX: 75000,
+        dailyPnlUGX: 3500,
+        activeMachinesCount: 1,
+        pendingTasksCount: 0,
+      },
+      transactions: [
+        {
+          id: 'tx_demo_bonus',
+          userId: defaultUserId,
+          username: 'demouser',
+          type: 'bonus',
+          amountUGX: 4000,
+          currency: 'UGX',
+          status: 'completed',
+          date: new Date().toLocaleString(),
+          timestamp: Date.now(),
+          created_at: new Date().toISOString(),
+          description: 'Welcome Bonus Credit',
+          paymentMethod: 'System',
+        },
+      ],
+      machines: [],
+      adminTasks: [],
+      notifications: [
+        {
+          id: 'notif_demo_1',
+          userId: defaultUserId,
+          title: 'Welcome Bonus Claimed!',
+          message: 'UGX 4,000 starter bonus has been credited to your account.',
+          type: 'success',
+          read: false,
+          date: 'Just now',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    },
+  },
+};
+
+const activeTokens: { [token: string]: string } = {
+  'tok_admin_coolman': defaultAdminId,
+  'tok_user_demouser': defaultUserId,
+};
 const balanceAdjustments: BalanceAdjustmentRecord[] = [];
 
 // Seed Default Investment Projects Catalog
@@ -234,29 +373,76 @@ function generateToken(userId: string): string {
 }
 
 // Authentication Middleware
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace(/^Bearer\s+/i, '');
 
-  if (!token || !activeTokens[token]) {
-    const userIdHeader = req.headers['x-user-id'] as string;
-    if (userIdHeader && serverDatabase[userIdHeader]) {
-      (req as any).userId = userIdHeader;
-      (req as any).userRecord = serverDatabase[userIdHeader].user;
+  if (token && activeTokens[token]) {
+    const userId = activeTokens[token];
+    const record = serverDatabase[userId];
+    if (record) {
+      (req as any).userId = userId;
+      (req as any).userRecord = record.user;
       return next();
     }
-    return res.status(401).json({ error: 'Unauthorized: Valid authentication token required.' });
   }
 
-  const userId = activeTokens[token];
-  const record = serverDatabase[userId];
-  if (!record) {
-    return res.status(401).json({ error: 'Session expired or user account not found.' });
+  const userIdHeader = req.headers['x-user-id'] as string;
+  if (userIdHeader && serverDatabase[userIdHeader]) {
+    (req as any).userId = userIdHeader;
+    (req as any).userRecord = serverDatabase[userIdHeader].user;
+    return next();
   }
 
-  (req as any).userId = userId;
-  (req as any).userRecord = record.user;
-  next();
+  if (supabaseAdmin && token) {
+    try {
+      const { data, error } = await supabaseAdmin.auth.getUser(token);
+      if (!error && data?.user) {
+        const u = data.user;
+        let record = serverDatabase[u.id];
+        if (!record) {
+          const meta = u.user_metadata || {};
+          const isAdmin = meta.role === 'admin' || meta.is_admin === true;
+          record = {
+            user: {
+              id: u.id,
+              username: meta.username || u.email?.split('@')[0] || 'user',
+              passwordHash: '',
+              fullName: meta.full_name || meta.username || 'User',
+              phone: meta.phone || '',
+              status: meta.status || 'active',
+              role: isAdmin ? 'admin' : 'user',
+              isAdmin,
+              tier: isAdmin ? 'VIP 2 Elite' : 'Standard',
+              referralCode: meta.referral_code || 'SC-DEMO',
+              referralCount: 0,
+              referralEarningsUGX: 0,
+              referrals: [],
+              welcomeBonusClaimed: true,
+              memberSince: 'August 2026',
+              createdAt: new Date().toISOString(),
+            },
+            data: {
+              wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+              transactions: [],
+              machines: [],
+              adminTasks: [],
+              notifications: [],
+            },
+          };
+          serverDatabase[u.id] = record;
+        }
+        activeTokens[token] = u.id;
+        (req as any).userId = u.id;
+        (req as any).userRecord = record.user;
+        return next();
+      }
+    } catch (e) {
+      // remote auth fallback
+    }
+  }
+
+  return res.status(401).json({ error: 'Unauthorized: Valid authentication token required.' });
 }
 
 // Administrator Authorization Middleware
@@ -596,6 +782,11 @@ app.get('/api/user/data', requireAuth, (req: Request, res: Response) => {
   res.json({
     user: record.user,
     data: record.data,
+    wallet: record.data.wallet,
+    transactions: record.data.transactions,
+    machines: record.data.machines,
+    adminTasks: record.data.adminTasks,
+    notifications: record.data.notifications,
     isAdmin: Boolean(record.user.isAdmin || record.user.role === 'admin'),
     isBlocked: record.user.status === 'blocked',
   });
@@ -864,7 +1055,7 @@ app.post('/api/wallet/withdraw', requireAuth, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Please enter a valid withdrawal amount in UGX.' });
   }
 
-  const MIN_WITHDRAWAL_UGX = 4000;
+  const MIN_WITHDRAWAL_UGX = 10000;
   if (numAmount < MIN_WITHDRAWAL_UGX) {
     return res.status(400).json({
       error: `Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`,
@@ -942,6 +1133,27 @@ app.post('/api/wallet/withdraw', requireAuth, (req: Request, res: Response) => {
     transaction: newTx,
     wallet: record.data.wallet,
   });
+});
+
+// Admin: Get All Transactions
+app.get('/api/admin/transactions', requireAuth, requireAdmin, (req: Request, res: Response) => {
+  const allTxs: any[] = [];
+
+  for (const uid in serverDatabase) {
+    const userAcc = serverDatabase[uid];
+    const txs = userAcc.data.transactions || [];
+    for (const t of txs) {
+      allTxs.push({
+        ...t,
+        userId: uid,
+        username: userAcc.user.username,
+        userFullName: userAcc.user.fullName,
+      });
+    }
+  }
+
+  allTxs.sort((a, b) => new Date(b.created_at || b.timestamp || 0).getTime() - new Date(a.created_at || a.timestamp || 0).getTime());
+  res.json({ transactions: allTxs });
 });
 
 // Admin: Get All Pending Transactions
