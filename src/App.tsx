@@ -27,6 +27,7 @@ import { ProductsBrowseView } from './components/ProductsBrowseView';
 import { WalletView } from './components/WalletView';
 import { MeProfileView } from './components/MeProfileView';
 import { ReferralView } from './components/ReferralView';
+import { SundaySpecialBanner } from './components/SundaySpecialBanner';
 import { WelcomeBonusCard } from './components/WelcomeBonusCard';
 
 import {
@@ -535,6 +536,8 @@ export default function App() {
                       }
                     />
                   </div>
+
+                  <SundaySpecialBanner onJoinOffer={() => setActiveTab('referral')} />
 
                   {/* Filter Pill Categories */}
                   <CategoryPills
