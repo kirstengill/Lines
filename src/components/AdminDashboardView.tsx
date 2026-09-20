@@ -604,7 +604,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setSystemSyncing(true);
     setTimeout(() => {
       setSystemSyncing(false);
-      showToast(`Hash multiplier applied: ${rewardMultiplier.toFixed(1)}x across sovereign cluster nodes.`);
+      showToast(`Fleet return multiplier applied: ${rewardMultiplier.toFixed(1)}x across logistics assets.`);
     }, 1000);
   };
 
@@ -765,8 +765,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* ADMIN TOP CONTROL BAR */}
       <div className="bg-[#0F172A] rounded-3xl p-5 text-white shadow-xl border border-slate-800 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-blue-600/20 via-indigo-600/10 to-transparent rounded-full blur-2xl pointer-events-none" />
-
         <div className="flex items-center justify-between relative z-10">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400">
@@ -866,7 +864,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('transactions')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'transactions'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
@@ -887,7 +885,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('users')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'users'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
@@ -902,19 +900,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('catalog')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'catalog'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          <span>Projects Catalog</span>
+          <span>Fleet Catalog</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('audit')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'audit'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
@@ -926,7 +924,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('cluster')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'cluster'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
@@ -938,24 +936,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('nodes')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'nodes'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
           <Server className="w-3.5 h-3.5" />
-          <span>Node Clusters</span>
+          <span>Fleet Depots</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('tasks')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
             activeSubTab === 'tasks'
-              ? 'bg-[#1657D9] text-white shadow-xs'
+              ? 'bg-[#0066FF] text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
-          <span>Multisig Tasks</span>
+          <span>Operations Tasks</span>
           {pendingTasksCount > 0 && (
             <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-black">
               {pendingTasksCount}
@@ -1804,10 +1802,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <div
                           className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-[16px] text-white shrink-0 shadow-xs ${
                             isAdmin
-                              ? 'bg-gradient-to-tr from-blue-600 to-indigo-600'
+                              ? 'bg-[#0066FF]'
                               : isBlocked
                               ? 'bg-red-600'
-                              : 'bg-gradient-to-tr from-slate-700 to-slate-900'
+                              : 'bg-slate-800'
                           }`}
                         >
                           {(u.fullName || u.username || 'U').charAt(0).toUpperCase()}
@@ -1995,7 +1993,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 Investment Projects Catalog ({catalogProjects.length})
               </h3>
               <p className="text-[11.5px] text-slate-500">
-                Manage hardware mining rigs, clean energy generators, and VIP nodes available for investment.
+                Manage commercial logistics vehicles, passenger vans, freight trucks, and fleet packages available for investment.
               </p>
             </div>
             <button
@@ -2004,12 +2002,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 setEditingProject({
                   title: '',
                   subtitle: '',
-                  category: 'DS-Mining',
+                  category: 'Boda Delivery',
                   dailyRewardUGX: 250000,
                   minInvestUGX: 5000000,
                   estYearlyROI: 120,
-                  hashrate: '60.0 TH/s',
-                  powerSource: 'Solar / Hybrid Dynamo',
+                  hashrate: 'Commercial 150cc',
+                  powerSource: 'Urban Express Dispatch',
                   status: 'Active',
                   image: '',
                 });
@@ -2017,7 +2015,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 setImageUploadError('');
                 setImageUploadSuccess(false);
               }}
-              className="bg-[#1657D9] hover:bg-blue-700 text-white font-bold text-[12.5px] px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              className="bg-[#0066FF] hover:bg-blue-700 text-white font-bold text-[12.5px] px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Add New Project
             </button>
@@ -2075,7 +2073,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <span className="font-bold text-blue-600">{proj.estYearlyROI}%</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10.5px]">Hashrate</span>
+                        <span className="text-slate-400 block text-[10.5px]">Vehicle Spec</span>
                         <span className="font-mono font-bold text-slate-700">{proj.hashrate}</span>
                       </div>
                     </div>
@@ -2215,14 +2213,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-[14px] font-extrabold text-slate-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" /> Platform Hash Multiplier
+              <Zap className="w-4 h-4 text-amber-500" /> Fleet Yield Multiplier
             </h3>
             <span className="font-mono font-black text-blue-600 text-[16px]">
               {rewardMultiplier.toFixed(1)}x
             </span>
           </div>
           <p className="text-[12px] text-slate-500 leading-relaxed">
-            Adjust the universal mining hash multiplier for all synchronized DS-Hardware clusters across the Uganda sovereign grid.
+            Adjust the universal return yield multiplier for all active logistics fleets and transit vehicles operating across Uganda.
           </p>
 
           <input
@@ -2243,41 +2241,41 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
           <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 space-y-1.5 text-[12px]">
             <div className="flex justify-between text-slate-600">
-              <span>Target Hardware:</span>
-              <span className="font-bold text-slate-900">Solar-Mech, DS-Shoe & Hydro</span>
+              <span>Target Assets:</span>
+              <span className="font-bold text-slate-900">Bikes, Vans, Cargo Trucks & Trailers</span>
             </div>
             <div className="flex justify-between text-slate-600">
-              <span>Consensus Engine:</span>
-              <span className="font-bold text-emerald-600">DS Hybrid Proof-of-Yield</span>
+              <span>Settlement Protocol:</span>
+              <span className="font-bold text-emerald-600">Asset-Backed Verified Logistical Yield</span>
             </div>
           </div>
 
           <button
             onClick={handleTriggerRebalance}
             disabled={systemSyncing}
-            className="w-full py-3 bg-[#1657D9] hover:bg-blue-700 text-white rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            className="w-full py-3 bg-[#0066FF] hover:bg-blue-600 text-white rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${systemSyncing ? 'animate-spin' : ''}`} />
-            {systemSyncing ? 'Synchronizing Cluster Nodes...' : 'Apply Multiplier & Sync Nodes'}
+            {systemSyncing ? 'Synchronizing Fleet Telemetry...' : 'Apply Multiplier & Sync Fleets'}
           </button>
         </div>
       )}
 
       {/* ==========================================
-          TAB 6: NODE CLUSTERS
+          TAB 6: FLEET DEPOTS
           ========================================== */}
       {activeSubTab === 'nodes' && (
         <div className="space-y-3">
           <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-3">
             <h3 className="text-[14px] font-extrabold text-slate-900 flex items-center gap-2">
-              <Server className="w-4 h-4 text-blue-600" /> Active Rigs & Subsystems
+              <Server className="w-4 h-4 text-blue-600" /> Active Fleet Depots & Logistics Hubs
             </h3>
 
             <div className="divide-y divide-slate-100">
               <div className="py-2.5 flex items-center justify-between">
                 <div>
-                  <h4 className="text-[13px] font-bold text-slate-900">Cluster Alpha (Jinja Solar Farm)</h4>
-                  <span className="text-[11px] text-slate-400 font-mono">64 Units • 99.9% Uptime</span>
+                  <h4 className="text-[13px] font-bold text-slate-900">Hub Alpha (Kampala Central Dispatch)</h4>
+                  <span className="text-[11px] text-slate-400 font-mono">64 Vehicles • 99.9% Uptime</span>
                 </div>
                 <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                   OPTIMAL
@@ -2286,8 +2284,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               <div className="py-2.5 flex items-center justify-between">
                 <div>
-                  <h4 className="text-[13px] font-bold text-slate-900">Cluster Beta (Victoria Hydro Dam)</h4>
-                  <span className="text-[11px] text-slate-400 font-mono">42 Units • 99.8% Uptime</span>
+                  <h4 className="text-[13px] font-bold text-slate-900">Hub Beta (Entebbe Air Cargo & Transit)</h4>
+                  <span className="text-[11px] text-slate-400 font-mono">42 Vehicles • 99.8% Uptime</span>
                 </div>
                 <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                   OPTIMAL
@@ -2296,8 +2294,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               <div className="py-2.5 flex items-center justify-between">
                 <div>
-                  <h4 className="text-[13px] font-bold text-slate-900">Cluster Gamma (Kampala Kinetic)</h4>
-                  <span className="text-[11px] text-slate-400 font-mono">42 Units • 98.9% Uptime</span>
+                  <h4 className="text-[13px] font-bold text-slate-900">Hub Gamma (Jinja Industrial Transit Corridor)</h4>
+                  <span className="text-[11px] text-slate-400 font-mono">42 Vehicles • 98.9% Uptime</span>
                 </div>
                 <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                   OPTIMAL
@@ -2309,14 +2307,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* ==========================================
-          TAB 7: MULTISIG TASKS
+          TAB 7: OPERATIONS TASKS
           ========================================== */}
       {activeSubTab === 'tasks' && (
         <div className="space-y-3">
           {tasks.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 text-center text-slate-500 border border-slate-100">
               <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              <p className="text-[13px] font-bold">All Multisig queue tasks resolved.</p>
+              <p className="text-[13px] font-bold">All Operations queue tasks resolved.</p>
             </div>
           ) : (
             tasks.map((task) => (
@@ -2730,7 +2728,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. SOLAR-MECH 20"
+                  placeholder="e.g. Boda Delivery Express 150"
                   value={editingProject.title || ''}
                   onChange={(e) => setEditingProject({ ...editingProject, title: e.target.value })}
                   required
@@ -2744,7 +2742,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. (Dual-Core Autonomous Miner)"
+                  placeholder="e.g. (Urban Courier & Quick Commerce)"
                   value={editingProject.subtitle || ''}
                   onChange={(e) => setEditingProject({ ...editingProject, subtitle: e.target.value })}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -2757,7 +2755,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     Category
                   </label>
                   <select
-                    value={editingProject.category || 'DS-Mining'}
+                    value={editingProject.category || 'Boda Delivery'}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -2766,9 +2764,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     }
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
                   >
-                    <option value="DS-Mining">DS-Mining</option>
-                    <option value="Clean Energy">Clean Energy</option>
-                    <option value="VIP Products">VIP Products</option>
+                    <option value="Boda Delivery">Boda Delivery</option>
+                    <option value="Passenger Vans">Passenger Vans</option>
+                    <option value="Cargo Trucks">Cargo Trucks</option>
+                    <option value="Logistics Fleets">Logistics Fleets</option>
                   </select>
                 </div>
 
@@ -2855,11 +2854,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
                 <div>
                   <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                    Hashrate
+                    Vehicle Spec / Capacity
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 54.2 TH/s"
+                    placeholder="e.g. 1.2 Ton Cargo / 150cc Engine"
                     value={editingProject.hashrate || ''}
                     onChange={(e) =>
                       setEditingProject({
@@ -2874,11 +2873,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                  Power Source / Hardware Spec
+                  Fleet Spec / Route Type
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Solar 1.2kW Array + Dual Dynamos"
+                  placeholder="e.g. Urban Delivery Hub / Inter-City Highway"
                   value={editingProject.powerSource || ''}
                   onChange={(e) =>
                     setEditingProject({

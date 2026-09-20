@@ -144,7 +144,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                 Account Access
               </h3>
               <p className="text-[11px] text-slate-500">
-                SolNova Capital · Solar Mining & Investment
+                FleetVest · Transport & Logistics Investment
               </p>
             </div>
           </div>
@@ -165,7 +165,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             }}
             className={`py-2 text-[12px] font-bold rounded-lg transition-all cursor-pointer ${
               tab === 'signin'
-                ? 'bg-white text-[#1657D9] shadow-xs'
+                ? 'bg-white text-[#0066FF] shadow-xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -178,7 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             }}
             className={`py-2 text-[12px] font-bold rounded-lg transition-all cursor-pointer ${
               tab === 'signup'
-                ? 'bg-white text-[#1657D9] shadow-xs'
+                ? 'bg-white text-[#0066FF] shadow-xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -296,7 +296,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                   type="text"
                   value={referralCode}
                   onChange={(e) => setReferralCode(cleanReferralCode(e.target.value) || e.target.value.toUpperCase())}
-                  placeholder="e.g. SC-8F3K9P"
+                  placeholder="e.g. FV-8F3K9P"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
@@ -305,7 +305,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 mt-2 bg-[#1657D9] hover:bg-blue-700 active:scale-98 text-white font-bold text-[14px] rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="w-full py-2.5 mt-2 bg-[#0066FF] hover:bg-blue-600 active:scale-98 text-white font-bold text-[14px] rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {loading
                 ? 'Processing...'

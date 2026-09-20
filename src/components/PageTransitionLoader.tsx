@@ -45,13 +45,10 @@ export const PageTransitionLoader: React.FC<PageTransitionLoaderProps> = ({
     >
       {/* 1. Top High-Precision Running Progress Indicator Bar */}
       <div className="h-[3px] w-full bg-slate-200/50 backdrop-blur-xs overflow-hidden relative shadow-xs">
-        <div className="h-full bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 animate-[pageProgress_0.75s_cubic-bezier(0.4,0,0.2,1)_infinite]" />
+        <div className="h-full bg-[#0066FF] animate-[pageProgress_0.75s_cubic-bezier(0.4,0,0.2,1)_infinite]" />
       </div>
 
-      {/* 2. Soft Ambient Glow Line underneath */}
-      <div className="h-[2px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent blur-[2px]" />
-
-      {/* 3. Subtle floating micro-indicator chip */}
+      {/* 2. Subtle floating micro-indicator chip */}
       <div className="flex justify-center mt-2.5">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 text-white backdrop-blur-md shadow-md border border-slate-700/50 text-[11px] font-semibold tracking-wide animate-page-fade-in">
           <Loader2 className="w-3 h-3 text-blue-400 animate-spin shrink-0" />

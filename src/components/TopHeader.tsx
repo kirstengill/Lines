@@ -1,7 +1,7 @@
 import React from 'react';
-import { Bell, LogIn, MessageCircle } from 'lucide-react';
+import { Bell, ChevronRight, User as UserIcon, Shield } from 'lucide-react';
 import { AppNotification, UserProfile } from '../types';
-import { WHATSAPP_HELP_URL } from '../constants/links';
+import { FleetVestLogo } from './FleetVestLogo';
 
 interface TopHeaderProps {
   notifications: AppNotification[];
@@ -9,90 +9,79 @@ interface TopHeaderProps {
   onOpenNotifications: () => void;
   onOpenAdmin: () => void;
   onOpenAuth?: () => void;
+  onOpenProfile?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
   notifications,
   user,
   onOpenNotifications,
+  onOpenAdmin,
   onOpenAuth,
+  onOpenProfile,
 }) => {
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const isAdmin = Boolean(user?.isAdmin);
 
   return (
-    <header className="px-5 pt-3 pb-2 flex items-center justify-between bg-transparent">
-      {/* Brand & Logo */}
-      <div className="flex items-center gap-2.5">
-        {/* SolNova brand mark: golden sun with energy bolt */}
-        <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#312E81] via-[#1E40AF] to-[#2563EB] shadow-md shadow-indigo-500/25">
-          <svg viewBox="0 0 24 24" className="w-5.5 h-5.5" aria-hidden="true">
-            <defs>
-              <linearGradient id="snSunHdr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#FDE68A" />
-                <stop offset="1" stopColor="#F59E0B" />
-              </linearGradient>
-            </defs>
-            <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FBBF24" strokeOpacity="0.4" strokeWidth="1" />
-            <circle cx="12" cy="12" r="4.8" fill="url(#snSunHdr)" />
-            <path d="M12.9 7.5 l-3.1 5.1 h2.2 l-0.9 3.7 l3.1 -5.1 h-2.2 z" fill="#FFFBEB" />
-          </svg>
-        </div>
+    <header className="px-4 sm:px-6 pt-3.5 pb-2.5 flex items-center justify-between bg-[#0D1017]/90 backdrop-blur-md border-b border-amber-500/20 sticky top-0 z-30">
+      {/* FleetVest Brand */}
+      <FleetVestLogo variant="light" size="sm" />
 
-        <div className="flex flex-col">
-          <h1 className="text-[17px] font-extrabold tracking-tight text-[#0F172A] leading-tight">
-            SolNova Capital
-          </h1>
-          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 leading-none mt-0.5">
-            Solar Mining & Investment
-          </span>
-        </div>
-      </div>
-
-      {/* Action Icons */}
-      <div className="flex items-center gap-1.5">
-        {/* WhatsApp Help Option */}
-        <a
-          id="btn-whatsapp-header"
-          href={WHATSAPP_HELP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 transition-all text-[11px] font-bold shadow-2xs active:scale-95"
-          title="Direct WhatsApp Help & Support"
-        >
-          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
-          <span className="hidden sm:inline">WhatsApp</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        </a>
-
-        {onOpenAuth && (
+      {/* Action Icons & Profile */}
+      <div className="flex items-center gap-2">
+        {isAdmin && (
           <button
-            onClick={onOpenAuth}
-            className="p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors flex items-center justify-center cursor-pointer"
-            title={user ? `Signed in as ${user.fullName}` : 'Sign In / Register'}
+            onClick={onOpenAdmin}
+            id="btn-admin-console-header"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-bold cursor-pointer transition-colors"
+            title="Administrator Control Center"
           >
-            {user ? (
-              <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shadow-xs">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
-              </div>
-            ) : (
-              <LogIn className="w-4 h-4 text-blue-600" />
-            )}
+            <Shield className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Admin</span>
           </button>
         )}
 
+        {/* Notifications */}
         <button
           id="btn-notifications"
           onClick={onOpenNotifications}
           aria-label="View notifications"
-          className="relative p-1.5 text-slate-700 hover:text-slate-900 rounded-full hover:bg-slate-200/60 transition-colors cursor-pointer"
+          className="relative p-2 text-slate-300 hover:text-amber-300 rounded-full hover:bg-amber-500/10 transition-colors cursor-pointer"
         >
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+            <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-amber-400 rounded-full ring-2 ring-[#0D1017]"></span>
           )}
         </button>
+
+        {/* User Profile Capsule */}
+        {user ? (
+          <button
+            onClick={onOpenProfile || onOpenAuth}
+            id="btn-header-profile"
+            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-[#161B26] hover:bg-[#1E2433] transition-colors cursor-pointer border border-amber-500/25"
+          >
+            <div className="w-7 h-7 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs">
+              {user.fullName ? user.fullName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+            </div>
+            <span className="text-xs font-semibold text-slate-200 max-w-[100px] truncate hidden sm:inline">
+              {user.fullName || user.username}
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-amber-400/60" />
+          </button>
+        ) : (
+          <button
+            onClick={onOpenAuth}
+            id="btn-header-signin"
+            className="px-3 py-1.5 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+          >
+            Sign In
+          </button>
+        )}
       </div>
     </header>
   );
 };
+
 

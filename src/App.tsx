@@ -27,7 +27,6 @@ import { ProductsBrowseView } from './components/ProductsBrowseView';
 import { WalletView } from './components/WalletView';
 import { MeProfileView } from './components/MeProfileView';
 import { ReferralView } from './components/ReferralView';
-import { SundaySpecialBanner } from './components/SundaySpecialBanner';
 import { WelcomeBonusCard } from './components/WelcomeBonusCard';
 
 import {
@@ -41,7 +40,7 @@ import { Lock, AlertTriangle } from 'lucide-react';
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('DS-Mining');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('All');
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
   const [pageLoadingMessage, setPageLoadingMessage] = useState<string>('Loading...');
 
@@ -201,11 +200,12 @@ export default function App() {
     if (tab === activeTab) return;
     const tabMessages: Record<NavTab, string> = {
       home: 'Loading Overview...',
-      investments: 'Loading Active Nodes...',
-      products: 'Browsing Products...',
+      investments: 'Loading Active Fleet Assets...',
+      products: 'Browsing Fleet Assets...',
       referral: 'Opening Referral Program...',
-      wallet: 'Syncing Consolidated Ledger...',
+      wallet: 'Syncing Fleet Ledger...',
       me: 'Loading Profile...',
+      settings: 'Opening Settings...',
     };
     triggerPageTransition(() => {
       setActiveTab(tab);
@@ -213,11 +213,12 @@ export default function App() {
   };
 
   // Category counts
-  const counts = {
-    vip: catalogMachines.filter((m) => m.category === 'VIP Products').length,
-    cleanEnergy: catalogMachines.filter((m) => m.category === 'Clean Energy').length,
-    dsMining: catalogMachines.filter((m) => m.category === 'DS-Mining').length,
-    all: catalogMachines.length,
+  const counts: Record<string, number> = {
+    'All': catalogMachines.length,
+    'Urban Delivery': catalogMachines.filter((m) => m.category === 'Urban Delivery').length,
+    'Passenger Transport': catalogMachines.filter((m) => m.category === 'Passenger Transport').length,
+    'Freight & Cargo': catalogMachines.filter((m) => m.category === 'Freight & Cargo').length,
+    'Fleet Operations': catalogMachines.filter((m) => m.category === 'Fleet Operations').length,
   };
 
   // Filtered Machines for Home Tab
@@ -536,8 +537,6 @@ export default function App() {
                       }
                     />
                   </div>
-
-                  <SundaySpecialBanner onJoinOffer={() => setActiveTab('referral')} />
 
                   {/* Filter Pill Categories */}
                   <CategoryPills

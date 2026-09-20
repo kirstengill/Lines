@@ -1,92 +1,114 @@
 import React from 'react';
-import { Home, BarChart2, Globe, Users, Wallet, User } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Store,
+  Briefcase,
+  Wallet,
+  Users,
+  Bell,
+  Settings,
+} from 'lucide-react';
 
-export type NavTab = 'home' | 'investments' | 'products' | 'referral' | 'wallet' | 'me';
+export type NavTab =
+  | 'home'
+  | 'investments'
+  | 'products'
+  | 'referral'
+  | 'wallet'
+  | 'me'
+  | 'settings';
 
 interface BottomNavigationProps {
-  activeTab: NavTab;
-  onSelectTab: (tab: NavTab) => void;
+  activeTab: string;
+  unreadNotificationsCount?: number;
+  onSelectTab: (tab: any) => void;
+  onOpenNotifications?: () => void;
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   activeTab,
+  unreadNotificationsCount = 0,
   onSelectTab,
+  onOpenNotifications,
 }) => {
+  const tabs = [
+    {
+      id: 'home',
+      label: 'Home',
+      icon: LayoutDashboard,
+      action: () => onSelectTab('home'),
+      active: activeTab === 'home',
+    },
+    {
+      id: 'products',
+      label: 'Marketplace',
+      icon: Store,
+      action: () => onSelectTab('products'),
+      active: activeTab === 'products',
+    },
+    {
+      id: 'investments',
+      label: 'Portfolio',
+      icon: Briefcase,
+      action: () => onSelectTab('investments'),
+      active: activeTab === 'investments',
+    },
+    {
+      id: 'wallet',
+      label: 'Wallet',
+      icon: Wallet,
+      action: () => onSelectTab('wallet'),
+      active: activeTab === 'wallet',
+    },
+    {
+      id: 'referral',
+      label: 'Referrals',
+      icon: Users,
+      action: () => onSelectTab('referral'),
+      active: activeTab === 'referral',
+    },
+    {
+      id: 'notifications',
+      label: 'Alerts',
+      icon: Bell,
+      action: () => (onOpenNotifications ? onOpenNotifications() : onSelectTab('notifications')),
+      badge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
+      active: false,
+    },
+    {
+      id: 'me',
+      label: 'Settings',
+      icon: Settings,
+      action: () => onSelectTab('me'),
+      active: activeTab === 'me' || activeTab === 'profile',
+    },
+  ];
+
   return (
-    <nav className="sticky bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 flex items-center justify-around z-30 shadow-xs">
-      {/* 1. Home */}
-      <button
-        id="nav-tab-home"
-        onClick={() => onSelectTab('home')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'home' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <Home className={`w-5 h-5 ${activeTab === 'home' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <span className="text-[10.5px] font-semibold mt-0.5">Home</span>
-      </button>
-
-      {/* 2. Investments */}
-      <button
-        id="nav-tab-investments"
-        onClick={() => onSelectTab('investments')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'investments' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <BarChart2 className={`w-5 h-5 ${activeTab === 'investments' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <span className="text-[10.5px] font-semibold mt-0.5">Invest</span>
-      </button>
-
-      {/* 3. Products */}
-      <button
-        id="nav-tab-products"
-        onClick={() => onSelectTab('products')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'products' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <Globe className={`w-5 h-5 ${activeTab === 'products' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <span className="text-[10.5px] font-semibold mt-0.5">Browse</span>
-      </button>
-
-      {/* 4. Referral (New Tab) */}
-      <button
-        id="nav-tab-referral"
-        onClick={() => onSelectTab('referral')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'referral' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <Users className={`w-5 h-5 ${activeTab === 'referral' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <div className="flex flex-col items-center leading-tight mt-0.5">
-          <span className="text-[10px] font-bold text-[#16A34A] leading-none">Referral</span>
-        </div>
-      </button>
-
-      {/* 5. Wallet */}
-      <button
-        id="nav-tab-wallet"
-        onClick={() => onSelectTab('wallet')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'wallet' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <Wallet className={`w-5 h-5 ${activeTab === 'wallet' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <span className="text-[10.5px] font-semibold mt-0.5">Wallet</span>
-      </button>
-
-      {/* 6. Me */}
-      <button
-        id="nav-tab-me"
-        onClick={() => onSelectTab('me')}
-        className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
-          activeTab === 'me' ? 'text-[#1657D9]' : 'text-slate-500 hover:text-slate-900'
-        }`}
-      >
-        <User className={`w-5 h-5 ${activeTab === 'me' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-        <span className="text-[10.5px] font-semibold mt-0.5">Me</span>
-      </button>
+    <nav className="sticky bottom-0 w-full bg-[#0B0E14]/95 backdrop-blur-md border-t border-amber-500/20 px-1 py-1.5 flex items-center justify-around z-30 shadow-lg lg:hidden">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            id={`nav-tab-${tab.id}`}
+            onClick={tab.action}
+            className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 transition-all cursor-pointer relative ${
+              tab.active ? 'text-amber-400' : 'text-slate-400 hover:text-amber-200'
+            }`}
+          >
+            <div className="relative">
+              <Icon className={`w-4.5 h-4.5 ${tab.active ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+              {tab.badge !== undefined && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0B0E14]" />
+              )}
+            </div>
+            <span className={`text-[10px] tracking-tight mt-0.5 truncate max-w-full ${tab.active ? 'font-bold text-amber-300' : 'font-medium text-slate-400'}`}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 };

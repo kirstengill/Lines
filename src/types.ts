@@ -1,20 +1,35 @@
+export type FleetCategory =
+  | 'All'
+  | 'Urban Delivery'
+  | 'Passenger Transport'
+  | 'Freight & Cargo'
+  | 'Fleet Operations'
+  | 'VIP Products'
+  | 'Clean Energy'
+  | 'DS-Mining'
+  | string;
+
 export interface Machine {
   id: string;
   title: string;
   subtitle?: string;
-  category: 'VIP Products' | 'Clean Energy' | 'DS-Mining' | 'All';
+  category: FleetCategory;
   image: string;
   dailyRewardUGX: number;
   status: 'Active' | 'Maintenance' | 'Pending' | 'Reserved';
   estYearlyROI: number;
   minInvestUGX: number;
-  hashrate: string;
-  powerSource: string;
-  uptime: string;
-  temperature: string;
-  efficiency: number;
-  totalMinedUGX: number;
-  unclaimedRewardsUGX: number;
+  cyclePeriodDays?: number;
+  cyclePeriod?: string;
+  projectedReturnUGX?: number;
+  vehicleType?: 'bike' | 'van' | 'truck' | 'fleet';
+  hashrate?: string;
+  powerSource?: string;
+  uptime?: string;
+  temperature?: string;
+  efficiency?: number;
+  totalMinedUGX?: number;
+  unclaimedRewardsUGX?: number;
   isBoosted?: boolean;
 }
 
@@ -24,17 +39,21 @@ export interface UserInvestment {
   machineId: string;
   title: string;
   subtitle?: string;
-  category: 'VIP Products' | 'Clean Energy' | 'DS-Mining' | 'All';
+  category: FleetCategory;
   image: string;
   amountInvestedUGX: number;
   investedDate: string;
   status: 'Active' | 'Maintenance' | 'Completed';
   dailyRewardUGX: number;
   estYearlyROI: number;
-  hashrate: string;
-  period: string; // e.g. "365 Days / Continuous Sovereign Yield"
-  totalMinedUGX: number;
-  unclaimedRewardsUGX: number;
+  cyclePeriodDays?: number;
+  cyclePeriod?: string;
+  projectedReturnUGX?: number;
+  vehicleType?: 'bike' | 'van' | 'truck' | 'fleet';
+  hashrate?: string;
+  period: string; // e.g. "60 days" or "90 days"
+  totalMinedUGX?: number;
+  unclaimedRewardsUGX?: number;
   isBoosted?: boolean;
 }
 

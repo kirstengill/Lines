@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, Bot, User, Sparkles, HelpCircle, MessageCircle, ExternalLink } from 'lucide-react';
+import { X, Send, Bot, User, HelpCircle, MessageCircle, ExternalLink } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { WHATSAPP_HELP_URL } from '../constants/links';
 
@@ -12,7 +12,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     {
       id: 'm1',
       sender: 'support',
-      text: 'Hello! Welcome to SolNova Capital — Solar Mining & Investment. How can I assist you with investment plans, MTN MoMo deposits (0766495353 - ELIX OWOMUZINYA), withdrawals, referral earnings, or WhatsApp support today?',
+      text: 'Hello! Welcome to FleetVest — Transport & Logistics Investment Platform. How can I assist you with fleet investment assets, MTN MoMo deposits (0766495353 - ELIX OWOMUZINYA), withdrawals (minimum UGX 10,000), referral earnings, or WhatsApp support today?',
       timestamp: 'Just now',
     },
   ]);
@@ -21,11 +21,11 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
 
   const quickQuestions = [
     'Chat with WhatsApp Helpdesk',
-    'What are the investment plans & daily earnings?',
+    'What are the fleet investment assets & daily returns?',
     'How do I deposit via USSD (0766495353 - ELIX OWOMUZINYA)?',
     'What is the minimum withdrawal & 15% fee?',
-    'How does the 15% referral bonus work?',
-    'How do I harvest/claim daily mining yields?',
+    'How does the 20% referral commission work?',
+    'How do I claim daily fleet returns?',
   ];
 
   const handleSend = (textToSend?: string) => {
@@ -44,7 +44,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     setIsTyping(true);
 
     setTimeout(() => {
-      let reply = "Our support team is here to assist! You can ask about our solar mining investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 10,000), or join our official WhatsApp Helpdesk & Community.";
+      let reply = "Our support team is here to assist! You can ask about our fleet investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 10,000), or join our official WhatsApp Helpdesk & Community.";
 
       const lower = text.toLowerCase();
 
@@ -53,24 +53,21 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "Official WhatsApp Help & Community Link:\n" +
           WHATSAPP_HELP_URL + "\n\n" +
           "Tap the 'Join WhatsApp Helpdesk' banner at the top of this modal to open WhatsApp directly.";
-      } else if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price')) {
-        reply = "Here is our current SolNova Solar Mining catalog:\n\n" +
-          "• Starter Plan: UGX 15,000 → UGX 3,500/day\n" +
-          "• Solar-Mech 10: UGX 20,000 → UGX 4,300/day\n" +
-          "• DS-Mining Shoe: UGX 30,000 → UGX 6,750/day\n" +
-          "• Clean Hydro Turbine X500: UGX 50,000 → UGX 11,500/day\n" +
-          "• Quantum Grid VIP-9000: UGX 100,000 → UGX 24,000/day\n\n" +
-          "Each active node earns daily yields that you can harvest directly to your wallet!";
-      } else if (lower.includes('starter')) {
-        reply = "The Starter Plan (Solar Miner Mini) costs UGX 15,000 and generates UGX 3,500 daily rewards (est. 8,517% annual ROI). It is the perfect entry-level solar mining node!";
-      } else if (lower.includes('solar-mech') || lower.includes('mech 10') || lower.includes('mower')) {
-        reply = "The Solar-Mech 10 costs UGX 20,000 and generates UGX 4,300 daily rewards with dual kinetic mowers and zero grid power costs.";
-      } else if (lower.includes('shoe') || lower.includes('ds-mining shoe')) {
-        reply = "The DS-Mining Shoe (Series 1) costs UGX 30,000 and generates UGX 6,750 daily rewards using kinetic-electro hybrid dynamos paired with ASIC processors.";
-      } else if (lower.includes('hydro') || lower.includes('turbine')) {
-        reply = "The Clean Hydro Turbine X500 costs UGX 50,000 and generates UGX 11,500 daily rewards (118.0 TH/s hashrate).";
-      } else if (lower.includes('quantum') || lower.includes('vip')) {
-        reply = "The Quantum Grid VIP-9000 costs UGX 100,000 and generates UGX 24,000 daily rewards (1,250.0 TH/s institutional hashrate).";
+      } else if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price') || lower.includes('asset') || lower.includes('vehicle')) {
+        reply = "Here is our current FleetVest Logistics Asset catalog:\n\n" +
+          "• Boda Delivery Express: UGX 15,000 → UGX 3,500/day\n" +
+          "• Matatu Passenger Van: UGX 35,000 → UGX 7,800/day\n" +
+          "• Cargo Freight Truck: UGX 80,000 → UGX 19,500/day\n" +
+          "• Logistics Fleet Network: UGX 150,000 → UGX 39,000/day\n\n" +
+          "Each active fleet asset earns daily returns that you can claim directly to your wallet!";
+      } else if (lower.includes('boda') || lower.includes('bike') || lower.includes('starter') || lower.includes('express')) {
+        reply = "The Boda Delivery Express costs UGX 15,000 and generates UGX 3,500 daily returns (est. 8,517% annual ROI). It is our entry-level urban delivery asset!";
+      } else if (lower.includes('van') || lower.includes('matatu') || lower.includes('shuttle') || lower.includes('passenger')) {
+        reply = "The Matatu Passenger Van costs UGX 35,000 and generates UGX 7,800 daily returns operating on high-demand passenger commuter routes.";
+      } else if (lower.includes('truck') || lower.includes('cargo') || lower.includes('freight')) {
+        reply = "The Cargo Freight Truck costs UGX 80,000 and generates UGX 19,500 daily returns serving inter-district freight and commercial haulage.";
+      } else if (lower.includes('fleet') || lower.includes('network') || lower.includes('multi')) {
+        reply = "The Logistics Fleet Network costs UGX 150,000 and generates UGX 39,000 daily returns representing a diversified multi-vehicle logistics enterprise.";
       } else if (lower.includes('deposit') || lower.includes('mtn') || lower.includes('airtel') || lower.includes('momo') || lower.includes('pay') || lower.includes('phone') || lower.includes('number') || lower.includes('0766495353') || lower.includes('elix') || lower.includes('owomuzinya')) {
         reply = "Step-by-Step Deposit Instructions:\n\n" +
           "1. Dial *165# (MTN) or *185# (Airtel) on your phone.\n" +
@@ -89,14 +86,14 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "• Channels: MTN MoMo, Airtel Money, or Stanbic Bank.\n" +
           "• Approvals: Requests are reviewed by administrators and dispatched directly to your mobile money number or bank account.";
       } else if (lower.includes('referral') || lower.includes('invite') || lower.includes('commission') || lower.includes('bonus') || lower.includes('friend')) {
-        reply = "SolNova Referral Program & Welcome Bonus:\n\n" +
+        reply = "FleetVest Referral Program & Welcome Bonus:\n\n" +
           "• Welcome Bonus: Every new user can withdraw their UGX 4,000 Welcome Bonus at 0% transaction fee (or claim to wallet) once they deposit any amount and it is approved by the admin!\n" +
           "• Referral Commission: You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
-          "• Example: If your friend deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.";
-      } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('payout')) {
-        reply = "Daily yields accumulate continuously on your active mining nodes. Simply tap the 'Harvest' or 'Claim' button on any active machine in your Dashboard or Machines tab to credit the UGX directly into your Consolidated Wallet!";
+          "• Example: If your invited partner deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.";
+      } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('return') || lower.includes('payout')) {
+        reply = "Daily returns accumulate continuously from active fleet operations. Simply tap 'Claim' on any active vehicle asset in your Dashboard or Active Assets section to credit the UGX directly into your Consolidated Wallet!";
       } else if (lower.includes('bank') || lower.includes('stanbic')) {
-        reply = "Bank Transfer Details (Withdrawals):\n• Bank: Stanbic Bank Uganda Limited\n• Account Number: 9030018829104\n• Account Name: SolNova Capital Uganda Ltd\n• Branch: Forest Mall Lugogo, Kampala\n\nNote: Deposits are processed via MTN MoMo and Airtel Money to 0766495353.";
+        reply = "Bank Transfer Details (Withdrawals):\n• Bank: Stanbic Bank Uganda Limited\n• Account Number: 9030018829104\n• Account Name: FleetVest Logistics Uganda Ltd\n• Branch: Forest Mall Lugogo, Kampala\n\nNote: Deposits are processed via MTN MoMo and Airtel Money to 0766495353.";
       }
 
       setMessages((prev) => [
@@ -116,18 +113,18 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
       <div className="bg-white rounded-3xl w-full max-w-md h-[560px] shadow-2xl border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-[#1657D9] text-white rounded-t-3xl">
+        <div className="p-4 border-b border-blue-600 flex items-center justify-between bg-[#0066FF] text-white rounded-t-3xl">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-xs">
               <Bot className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-[15px] font-bold leading-tight">
-                SolNova Support Desk
+                FleetVest Support Desk
               </h3>
               <p className="text-[11px] text-blue-100 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                24/7 AI & WhatsApp Concierge
+                24/7 Operations & WhatsApp Helpdesk
               </p>
             </div>
           </div>
@@ -176,8 +173,8 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 ${
                   m.sender === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-slate-200 text-blue-600 shadow-xs'
+                    ? 'bg-[#0066FF] text-white'
+                    : 'bg-white border border-slate-200 text-[#0066FF] shadow-xs'
                 }`}
               >
                 {m.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
@@ -185,7 +182,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
               <div
                 className={`max-w-[80%] rounded-2xl p-3 text-[13px] leading-relaxed whitespace-pre-line ${
                   m.sender === 'user'
-                    ? 'bg-[#1657D9] text-white rounded-tr-xs'
+                    ? 'bg-[#0066FF] text-white rounded-tr-xs'
                     : 'bg-white text-slate-800 border border-slate-200/80 shadow-xs rounded-tl-xs'
                 }`}
               >
@@ -229,7 +226,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           <button
             onClick={() => handleSend()}
             disabled={!inputText.trim()}
-            className="p-2 rounded-xl bg-[#1657D9] hover:bg-blue-700 disabled:opacity-50 text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-[#0066FF] hover:bg-blue-700 disabled:opacity-50 text-white transition-colors cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>

@@ -64,19 +64,23 @@ export interface CatalogMachine {
   id: string;
   title: string;
   subtitle?: string;
-  category: 'VIP Products' | 'Clean Energy' | 'DS-Mining' | 'All';
+  category: string;
   image: string;
   dailyRewardUGX: number;
   status: 'Active' | 'Maintenance' | 'Pending' | 'Reserved';
   estYearlyROI: number;
   minInvestUGX: number;
-  hashrate: string;
-  powerSource: string;
-  uptime: string;
-  temperature: string;
-  efficiency: number;
-  totalMinedUGX: number;
-  unclaimedRewardsUGX: number;
+  cyclePeriodDays?: number;
+  cyclePeriod?: string;
+  projectedReturnUGX?: number;
+  vehicleType?: 'bike' | 'van' | 'truck' | 'fleet';
+  hashrate?: string;
+  powerSource?: string;
+  uptime?: string;
+  temperature?: string;
+  efficiency?: number;
+  totalMinedUGX?: number;
+  unclaimedRewardsUGX?: number;
   isBoosted?: boolean;
 }
 
@@ -242,102 +246,99 @@ const activeTokens: { [token: string]: string } = {
 };
 const balanceAdjustments: BalanceAdjustmentRecord[] = [];
 
-// Seed Default Investment Projects Catalog
+// Seed Default FleetVest Investment Products Catalog
 let catalogDatabase: CatalogMachine[] = [
   {
-    id: 'mach_starter_15k',
-    title: 'STARTER NODE',
-    subtitle: '(Entry-level Miner)',
-    category: 'DS-Mining',
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: 1250, // Massive yield so it returns 25,000 very quickly
+    id: 'fleet_delivery_bike',
+    title: 'Delivery Bike',
+    subtitle: 'Urban delivery operations',
+    category: 'Urban Delivery',
+    image: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=80',
+    dailyRewardUGX: 3500,
     status: 'Active',
-    estYearlyROI: 3000,
+    estYearlyROI: 8517,
     minInvestUGX: 15000,
-    hashrate: '2.5 TH/s',
-    powerSource: 'Grid Power',
-    uptime: '99.50%',
-    temperature: '35.0°C',
-    efficiency: 95.0,
-    totalMinedUGX: 0,
-    unclaimedRewardsUGX: 0,
-    isBoosted: false,
-  },
-  {
-    id: 'mach_solar_mech_10',
-    title: 'SOLAR-MECH 10',
-    subtitle: '(Advanced Mower-Miner)',
-    category: 'DS-Mining',
-    image: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: 212328,
-    status: 'Active',
-    estYearlyROI: 120,
-    minInvestUGX: 5000000,
-    hashrate: '54.2 TH/s',
-    powerSource: 'Solar 1.2kW Array + Dual Kinetic Blade Dynamos',
-    uptime: '99.94%',
-    temperature: '41.2°C',
-    efficiency: 99.2,
-    totalMinedUGX: 18450000,
-    unclaimedRewardsUGX: 142800,
-    isBoosted: false,
-  },
-  {
-    id: 'mach_ds_mining_shoe',
-    title: 'DS-MINING SHOE (Series 1)',
-    subtitle: '(Kinetic Footwear Node)',
-    category: 'DS-Mining',
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: 1200000,
-    status: 'Active',
-    estYearlyROI: 135,
-    minInvestUGX: 25000000,
-    hashrate: '210.8 TH/s',
-    powerSource: 'Kinetic-Electro Hybrid Regenerative Coil',
-    uptime: '99.98%',
-    temperature: '38.6°C',
-    efficiency: 98.8,
-    totalMinedUGX: 148200000,
-    unclaimedRewardsUGX: 890000,
-    isBoosted: true,
-  },
-  {
-    id: 'mach_hydro_turbine_x500',
-    title: 'HYDRO-MINER X500',
-    subtitle: '(Micro-Hydro Generator)',
-    category: 'Clean Energy',
-    image: 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: 717672,
-    status: 'Active',
-    estYearlyROI: 110,
-    minInvestUGX: 10000000,
-    hashrate: '118.0 TH/s',
-    powerSource: 'Micro-Hydro Turbine + Closed Loop Coolant',
+    cyclePeriodDays: 60,
+    cyclePeriod: '60 days',
+    projectedReturnUGX: 210000,
+    vehicleType: 'bike',
+    hashrate: 'Commercial 150cc',
+    powerSource: 'Hybrid Fuel Injection + Telematics',
     uptime: '99.85%',
-    temperature: '32.1°C',
-    efficiency: 99.6,
-    totalMinedUGX: 42100000,
-    unclaimedRewardsUGX: 350000,
-    isBoosted: false,
-  },
-  {
-    id: 'mach_quantum_vip_9000',
-    title: 'QUANTUM VIP NODE-9',
-    subtitle: '(High-Density Institutional Rig)',
-    category: 'VIP Products',
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: 4500000,
-    status: 'Reserved',
-    estYearlyROI: 180,
-    minInvestUGX: 100000000,
-    hashrate: '1,250.0 TH/s',
-    powerSource: 'Direct Grid / Cryo-Immersion Subsystem',
-    uptime: '100.00%',
-    temperature: '26.4°C',
-    efficiency: 99.9,
+    temperature: 'Optimal',
+    efficiency: 98.5,
     totalMinedUGX: 0,
     unclaimedRewardsUGX: 0,
     isBoosted: false,
+  },
+  {
+    id: 'fleet_passenger_van',
+    title: 'Passenger Van',
+    subtitle: 'Intercity & urban transport',
+    category: 'Passenger Transport',
+    image: 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&w=800&q=80',
+    dailyRewardUGX: 10000,
+    status: 'Active',
+    estYearlyROI: 9125,
+    minInvestUGX: 40000,
+    cyclePeriodDays: 90,
+    cyclePeriod: '90 days',
+    projectedReturnUGX: 900000,
+    vehicleType: 'van',
+    hashrate: '14-Passenger Shuttle',
+    powerSource: 'Turbo Diesel + Route Telemetry',
+    uptime: '99.92%',
+    temperature: 'Optimal',
+    efficiency: 99.1,
+    totalMinedUGX: 0,
+    unclaimedRewardsUGX: 0,
+    isBoosted: false,
+  },
+  {
+    id: 'fleet_cargo_truck',
+    title: 'Cargo Truck',
+    subtitle: 'Freight & goods transport',
+    category: 'Freight & Cargo',
+    image: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=800&q=80',
+    dailyRewardUGX: 18000,
+    status: 'Active',
+    estYearlyROI: 8760,
+    minInvestUGX: 75000,
+    cyclePeriodDays: 120,
+    cyclePeriod: '120 days',
+    projectedReturnUGX: 2160000,
+    vehicleType: 'truck',
+    hashrate: '18-Tonne Freight Carrier',
+    powerSource: 'Heavy-Duty Diesel + GPS Fleet Hub',
+    uptime: '99.95%',
+    temperature: 'Optimal',
+    efficiency: 99.4,
+    totalMinedUGX: 0,
+    unclaimedRewardsUGX: 0,
+    isBoosted: false,
+  },
+  {
+    id: 'fleet_logistics_fleet',
+    title: 'Logistics Fleet',
+    subtitle: 'Multi-vehicle operations',
+    category: 'Fleet Operations',
+    image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80',
+    dailyRewardUGX: 40000,
+    status: 'Active',
+    estYearlyROI: 9733,
+    minInvestUGX: 150000,
+    cyclePeriodDays: 180,
+    cyclePeriod: '180 days',
+    projectedReturnUGX: 7200000,
+    vehicleType: 'fleet',
+    hashrate: 'Multi-Unit Fleet Network',
+    powerSource: 'Integrated Dispatch & Enterprise ERP',
+    uptime: '99.99%',
+    temperature: 'Optimal',
+    efficiency: 99.8,
+    totalMinedUGX: 0,
+    unclaimedRewardsUGX: 0,
+    isBoosted: true,
   },
 ];
 

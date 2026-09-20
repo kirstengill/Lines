@@ -1,6 +1,6 @@
 {
-  "name": "SolNova Capital — Solar Mining & Investment",
-  "description": "Clean, modern mobile solar asset investment dashboard and mining hardware portfolio with real-time analytics, consolidated UGX wallet, and mining node management.",
+  "name": "FleetVest — Transport & Logistics Investment Platform",
+  "description": "Invest in the infrastructure that keeps businesses moving. Connect with revenue-generating transport assets and earn consistent daily returns across delivery bikes, vans, cargo trucks, and logistics fleets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

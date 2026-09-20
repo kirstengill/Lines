@@ -257,13 +257,13 @@ export const supabaseAdmin = {
       // 1. Try atomic RPC first
       const { data: rpcData, error: rpcError } = await sb.rpc('buy_investment', {
         p_machine_id: machineObj.id || 'custom_node',
-        p_title: machineObj.title || 'Investment Node',
-        p_category: machineObj.category || 'DS-Mining',
-        p_image: machineObj.image || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+        p_title: machineObj.title || 'Investment Asset',
+        p_category: machineObj.category || 'Urban Delivery',
+        p_image: machineObj.image || 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=80',
         p_amount_ugx: cost,
         p_daily_reward_ugx: Number(machineObj.dailyRewardUGX || 0),
-        p_hashrate: machineObj.hashrate || '10.0 TH/s',
-        p_power_source: machineObj.powerSource || 'Clean Energy Array',
+        p_hashrate: machineObj.hashrate || 'Commercial 150cc',
+        p_power_source: machineObj.powerSource || 'Transport & Logistics',
         p_est_roi: Number(machineObj.estYearlyROI || 120),
       });
 
@@ -417,10 +417,10 @@ export const supabaseAdmin = {
             status: m.status || 'Active',
             est_yearly_roi: m.estYearlyROI || 120,
             min_invest_ugx: m.minInvestUGX,
-            hashrate: m.hashrate || '10.0 TH/s',
-            power_source: m.powerSource || 'Clean Energy',
+            hashrate: m.hashrate || 'Fleet Asset Spec',
+            power_source: m.powerSource || 'Transport & Logistics',
             uptime: m.uptime || '99.9%',
-            temperature: m.temperature || '36.0°C',
+            temperature: m.temperature || 'Optimal',
             efficiency: m.efficiency || 98.5,
             total_mined_ugx: m.totalMinedUGX || 0,
             unclaimed_rewards_ugx: m.unclaimedRewardsUGX || 0,
@@ -446,16 +446,16 @@ export const supabaseAdmin = {
           id: m.id,
           title: m.title,
           subtitle: m.subtitle || undefined,
-          category: m.category || 'DS-Mining',
+          category: m.category || 'Urban Delivery',
           image: resolvedImage || m.image || '',
           dailyRewardUGX: Number(m.daily_reward_ugx || m.dailyRewardUGX || 0),
           status: (m.status || 'Active') as Machine['status'],
           estYearlyROI: Number(m.est_yearly_roi || m.estYearlyROI || 0),
           minInvestUGX: Number(m.min_invest_ugx || m.minInvestUGX || 0),
-          hashrate: m.hashrate || '10.0 TH/s',
-          powerSource: m.power_source || m.powerSource || 'Clean Energy Array',
+          hashrate: m.hashrate || 'Fleet Asset Spec',
+          powerSource: m.power_source || m.powerSource || 'Transport & Logistics',
           uptime: m.uptime || '99.9%',
-          temperature: m.temperature || '36.0°C',
+          temperature: m.temperature || 'Optimal',
           efficiency: Number(m.efficiency || 98.5),
           totalMinedUGX: Number(m.total_mined_ugx || m.totalMinedUGX || 0),
           unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || m.unclaimedRewardsUGX || 0),
@@ -463,69 +463,38 @@ export const supabaseAdmin = {
         };
       });
 
-      // One-time migrations: the old seeded catalog had an unrealistic jump from
-      // UGX 15,000 straight to millions, and rewards that didn't match the new
-      // business schedule. If a core plan still carries a stale signature, sync
-      // it to the corrected values. Admin-created custom plans are untouched.
-      const CANONICAL: Record<string, { min: number; daily: number; roi: number }> = {
-        mach_starter_15k: { min: 15000, daily: 3500, roi: 8517 },
-        mach_solar_mech_10: { min: 20000, daily: 4300, roi: 7848 },
-        mach_ds_mining_shoe: { min: 30000, daily: 6750, roi: 8213 },
-        mach_hydro_turbine_x500: { min: 50000, daily: 11500, roi: 8395 },
-        mach_quantum_vip_9000: { min: 100000, daily: 24000, roi: 8760 },
-      };
-      const STALE_MIN_INVEST = new Set([5000000, 25000000, 10000000, 100000000]);
-      const corrections = mappedMachines
-        .filter((m) => {
-          const canon = CANONICAL[m.id];
-          if (!canon) return false;
-          if (m.minInvestUGX !== canon.min && STALE_MIN_INVEST.has(m.minInvestUGX)) return true;
-          // Starter plan: old 1,250 reward or any wrong reward at the correct minimum
-          if (m.id === 'mach_starter_15k' && m.minInvestUGX === canon.min && m.dailyRewardUGX !== canon.daily) return true;
-          // Plans corrected in the first migration round but with outdated rewards
-          if (m.minInvestUGX === canon.min && m.dailyRewardUGX !== canon.daily && [850, 1440, 3590, 4500].includes(m.dailyRewardUGX)) return true;
-          return false;
-        })
-        .map((m) => {
-          const canon = CANONICAL[m.id];
-          const base = AVAILABLE_CATALOG.find((c) => c.id === m.id)!;
-          return {
+      const hasFleetProducts = mappedMachines.some((m) => m.id.startsWith('fleet_'));
+      if (!hasFleetProducts) {
+        console.log('[Supabase Admin] Migrating catalog to FleetVest products...');
+        try {
+          const fleetSeedPayload = AVAILABLE_CATALOG.map((m) => ({
             id: m.id,
-            title: base.title,
-            subtitle: base.subtitle || null,
-            category: base.category,
-            image: base.image,
-            daily_reward_ugx: canon.daily,
-            status: base.status || 'Active',
-            est_yearly_roi: canon.roi,
-            min_invest_ugx: canon.min,
-            hashrate: base.hashrate || '10.0 TH/s',
-            power_source: base.powerSource || 'Clean Energy',
-            uptime: base.uptime || '99.9%',
-            temperature: base.temperature || '36.0°C',
-            efficiency: base.efficiency || 98.5,
+            title: m.title,
+            subtitle: m.subtitle || null,
+            category: m.category,
+            image: m.image,
+            daily_reward_ugx: m.dailyRewardUGX,
+            status: m.status || 'Active',
+            est_yearly_roi: m.estYearlyROI || 120,
+            min_invest_ugx: m.minInvestUGX,
+            hashrate: m.hashrate || 'Fleet Asset',
+            power_source: m.powerSource || 'Transport & Logistics',
+            uptime: m.uptime || '99.9%',
+            temperature: m.temperature || 'Optimal',
+            efficiency: m.efficiency || 99.0,
             total_mined_ugx: 0,
             unclaimed_rewards_ugx: 0,
-            is_boosted: Boolean(base.isBoosted),
-          };
-        });
-      if (corrections.length > 0) {
-        try {
-          await sb.from('catalog_machines').upsert(corrections, { onConflict: 'id' });
-          corrections.forEach((c) => {
-            const m = mappedMachines.find((x) => x.id === c.id);
-            if (m) {
-              m.minInvestUGX = c.min_invest_ugx;
-              m.dailyRewardUGX = c.daily_reward_ugx;
-              m.estYearlyROI = c.est_yearly_roi;
-            }
-          });
-        } catch (fixErr) {
-          console.warn('[Supabase Admin] Catalog amount migration notice:', fixErr);
+            is_boosted: Boolean(m.isBoosted),
+          }));
+          await sb.from('catalog_machines').upsert(fleetSeedPayload, { onConflict: 'id' });
+          return { machines: AVAILABLE_CATALOG };
+        } catch (seedErr) {
+          console.warn('[Supabase Admin] Fleet catalog seeding notice:', seedErr);
+          return { machines: AVAILABLE_CATALOG };
         }
       }
 
-      return { machines: mappedMachines };
+      return { machines: mappedMachines.filter((m) => !m.id.startsWith('mach_')).length > 0 ? mappedMachines.filter((m) => !m.id.startsWith('mach_')) : AVAILABLE_CATALOG };
     } catch (e: any) {
       console.error('[Supabase Admin] fetchCatalogMachines error:', e);
       return { machines: AVAILABLE_CATALOG, error: e?.message };

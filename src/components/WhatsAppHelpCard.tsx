@@ -10,11 +10,8 @@ export const WhatsAppHelpCard: React.FC = () => {
         href={WHATSAPP_HELP_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="group relative block overflow-hidden rounded-2xl bg-gradient-to-r from-[#075E54] via-[#128C7E] to-[#25D366] p-4 text-white shadow-md shadow-emerald-900/15 hover:shadow-lg hover:shadow-emerald-900/25 transition-all duration-200 active:scale-[0.99] border border-emerald-400/20"
+        className="group relative block overflow-hidden rounded-2xl bg-[#075E54] p-4 text-white shadow-md shadow-emerald-950/20 hover:bg-[#064e46] transition-all duration-200 active:scale-[0.99] border border-emerald-600/30"
       >
-        {/* Subtle background glow effect */}
-        <div className="absolute -right-8 -top-8 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
-        
         <div className="relative z-10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-xs flex items-center justify-center border border-white/20 shadow-xs shrink-0 group-hover:bg-white/25 transition-colors">
@@ -30,7 +27,7 @@ export const WhatsAppHelpCard: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11.5px] text-emerald-100 font-medium leading-tight mt-0.5">
-                Connect directly with support agents, verify deposits, & get instant mining assistance.
+                Connect directly with support agents, verify deposits, & get instant fleet investment assistance.
               </p>
             </div>
           </div>

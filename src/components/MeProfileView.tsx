@@ -39,7 +39,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
       {/* Profile Card */}
       <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-[18px] shadow-sm">
+          <div className="w-13 h-13 rounded-2xl bg-[#0066FF] text-white flex items-center justify-center font-bold text-[18px] shadow-sm">
             {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
           </div>
           <div>
@@ -78,7 +78,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
       </div>
 
       {/* Referral Program Banner */}
-      <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 border border-blue-200/80 shadow-xs flex items-center justify-between">
+      <div className="bg-blue-50/70 rounded-2xl p-4 border border-blue-100 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
             <Users className="w-5 h-5" />
@@ -89,13 +89,13 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                 Referral Program
               </h4>
               <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-200 text-blue-900 px-1.5 py-0.2 rounded-full">
-                Code: {user?.referralCode || 'SC-SOLNOVA'}
+                Code: {user?.referralCode || 'FV-FLEET'}
               </span>
             </div>
             <p className="text-[11px] text-slate-600 mt-0.5">
               {user?.referralCount
                 ? `${user.referralCount} referrals • UGX ${(user.referralEarningsUGX || 0).toLocaleString()} earned`
-                : 'Invite friends and earn 20% of every approved deposit they make'}
+                : 'Invite partners and earn 20% commission on every deposit they make'}
             </p>
           </div>
         </div>
@@ -103,7 +103,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
         {onNavigateToReferral && (
           <button
             onClick={onNavigateToReferral}
-            className="px-3 py-1.5 bg-[#1657D9] text-white rounded-xl text-[11px] font-bold shadow-xs hover:bg-blue-700 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+            className="px-3 py-1.5 bg-[#0066FF] text-white rounded-xl text-[11px] font-bold shadow-xs hover:bg-blue-600 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
           >
             <span>View</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -132,7 +132,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                     Root
                   </span>
                 </div>
-                <span className="text-[11px] text-blue-600">Multisig queue and cluster yield settings</span>
+                <span className="text-[11px] text-blue-600">Pending deposits, withdrawals and fleet operations</span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-blue-400" />
@@ -195,9 +195,9 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
             </div>
             <div>
               <span className="text-[13px] font-bold text-slate-900 block">
-                24/7 DS Concierge Support
+                Fleet Support Desk
               </span>
-              <span className="text-[11px] text-slate-400">Live AI & human technical desk</span>
+              <span className="text-[11px] text-slate-400">Direct technical and transaction support</span>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -212,7 +212,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
               <span className="text-[13px] font-bold text-slate-900 block">
                 Operating Currency & Region
               </span>
-              <span className="text-[11px] text-slate-400">Uganda (UGX Sovereign Network)</span>
+              <span className="text-[11px] text-slate-400">Uganda (UGX Logistics Network)</span>
             </div>
           </div>
         </div>
@@ -233,7 +233,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
 
       {/* Footer Info */}
       <div className="text-center pt-2 text-[11px] text-slate-400">
-        SolNova Capital • Solar Mining & Investment
+        FleetVest • Asset-Backed Transport & Logistics Platform
       </div>
     </div>
   );

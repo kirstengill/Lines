@@ -1,5 +1,5 @@
 /**
- * Standard REST API Client for SolNova Capital — Solar Mining & Investment
+ * Standard REST API Client for FleetVest — Transport & Logistics Investment
  * Integrates with Supabase Cloud & Server Backend as Single Source of Truth
  * NO localStorage or sessionStorage is used. Sessions are maintained in-memory & cloud.
  */

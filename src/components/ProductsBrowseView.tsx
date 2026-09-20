@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Machine } from '../types';
 import { AVAILABLE_CATALOG } from '../data/initialData';
-import { CategoryPills, CategoryType } from './CategoryPills';
+import { CategoryPills } from './CategoryPills';
 import { InvestmentCard } from './InvestmentCard';
-import { Search, Sparkles } from 'lucide-react';
+import { Search, Truck, Layers } from 'lucide-react';
 
 interface ProductsBrowseViewProps {
   machines: Machine[];
@@ -15,10 +15,9 @@ interface ProductsBrowseViewProps {
 export const ProductsBrowseView: React.FC<ProductsBrowseViewProps> = ({
   machines,
   catalog,
-  onSelectMachine,
   onInvestInMachine,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Use dynamic catalog from server/Supabase, fallback to AVAILABLE_CATALOG or machines
@@ -28,11 +27,12 @@ export const ProductsBrowseView: React.FC<ProductsBrowseViewProps> = ({
     ? AVAILABLE_CATALOG
     : machines;
 
-  const counts = {
-    vip: catalogList.filter((m) => m.category === 'VIP Products').length,
-    cleanEnergy: catalogList.filter((m) => m.category === 'Clean Energy').length,
-    dsMining: catalogList.filter((m) => m.category === 'DS-Mining').length,
-    all: catalogList.length,
+  const counts: Record<string, number> = {
+    'All': catalogList.length,
+    'Urban Delivery': catalogList.filter((m) => m.category === 'Urban Delivery').length,
+    'Passenger Transport': catalogList.filter((m) => m.category === 'Passenger Transport').length,
+    'Freight & Cargo': catalogList.filter((m) => m.category === 'Freight & Cargo').length,
+    'Fleet Operations': catalogList.filter((m) => m.category === 'Fleet Operations').length,
   };
 
   const filteredMachines = catalogList.filter((m) => {
@@ -40,22 +40,33 @@ export const ProductsBrowseView: React.FC<ProductsBrowseViewProps> = ({
       selectedCategory === 'All' ? true : m.category === selectedCategory;
     const matchesSearch =
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.subtitle && m.subtitle.toLowerCase().includes(searchQuery.toLowerCase()));
+      (m.subtitle && m.subtitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (m.vehicleType && m.vehicleType.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCat && matchesSearch;
   });
 
   return (
-    <div className="space-y-3 pb-8">
+    <div className="space-y-4 pb-12 pt-2">
+      {/* Header Bar */}
+      <div className="px-5">
+        <h2 className="text-xl sm:text-2xl font-black text-[#0B192C] tracking-tight">
+          Fleet Marketplace
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+          Select a revenue-generating vehicle or logistics unit to invest and earn daily UGX yields.
+        </p>
+      </div>
+
       {/* Search Input */}
-      <div className="px-5 pt-2">
+      <div className="px-5">
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search mining rigs, shoes, solar equipment..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-xs"
+            placeholder="Search delivery bikes, passenger vans, cargo trucks, fleets..."
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-xs"
           />
         </div>
       </div>
@@ -69,17 +80,14 @@ export const ProductsBrowseView: React.FC<ProductsBrowseViewProps> = ({
 
       {/* Catalog List */}
       <div className="px-5">
-        <div className="flex items-center justify-between mb-2.5">
-          <div>
-            <h3 className="text-[16px] font-bold text-[#0F172A]">
-              Available Investment Catalog ({filteredMachines.length})
-            </h3>
-            <p className="text-[11.5px] text-slate-500">
-              Select any clean-energy node to deploy and earn daily UGX yields
-            </p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Available Units ({filteredMachines.length})
+            </span>
           </div>
-          <span className="text-[11px] text-blue-600 font-semibold flex items-center gap-1 shrink-0 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-            <Sparkles className="w-3 h-3" /> Live
+          <span className="text-xs text-[#0066FF] font-bold flex items-center gap-1 shrink-0 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+            <Truck className="w-3 h-3" /> Real Logistics
           </span>
         </div>
 
@@ -97,3 +105,4 @@ export const ProductsBrowseView: React.FC<ProductsBrowseViewProps> = ({
     </div>
   );
 };
+

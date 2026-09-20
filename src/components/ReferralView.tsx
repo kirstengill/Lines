@@ -64,7 +64,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
   const getReferralUrl = useCallback((): string => {
     if (!referralCode) return '';
-    if (typeof window === 'undefined') return `https://solnovacapital.com/?ref=${referralCode}`;
+    if (typeof window === 'undefined') return `https://fleetvest.app/?ref=${referralCode}`;
     const base = `${window.location.origin}${window.location.pathname}`;
     const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
     return `${cleanBase}?ref=${referralCode}`;
@@ -231,8 +231,8 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
   const handleNativeShare = async () => {
     const shareData = {
-      title: 'SolNova Capital — Solar Mining & Investment',
-      text: `Join SolNova Capital using my invitation code ${referralCode}. Start earning daily yields in Uganda (UGX) today!`,
+      title: 'FleetVest — Transport & Logistics Investment',
+      text: `Join FleetVest using my invitation code ${referralCode}. Start earning daily returns on fleet vehicles in Uganda (UGX)!`,
       url: referralUrl,
     };
 
@@ -299,13 +299,10 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
       </div>
 
       {/* MAIN HERO CARD: 20% Deposit Commission Rule */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1657D9] via-[#1E40AF] to-[#0F172A] p-5 text-white shadow-md">
-        <div className="absolute -top-12 -right-12 w-36 h-36 bg-blue-400/20 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
-
+      <div className="relative overflow-hidden rounded-3xl bg-[#0B192C] p-5 text-white shadow-md border border-slate-800">
         <div className="relative z-10 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-full text-amber-300 flex items-center gap-1 border border-white/10">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/10 px-2.5 py-1 rounded-full text-amber-300 flex items-center gap-1 border border-white/10">
               <Percent className="w-3 h-3 text-amber-300" /> 20% Commission Rate
             </span>
             <span className="text-[11px] font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
@@ -317,14 +314,14 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
             <h2 className="text-[18px] font-black tracking-tight leading-snug">
               Earn 20% Commission on Every Approved Deposit
             </h2>
-            <p className="text-[12px] text-blue-100/90 mt-1 leading-relaxed">
+            <p className="text-[12px] text-slate-300 mt-1 leading-relaxed">
               When a user joins with your code and their deposit is approved by admin, 20% commission is earned and stored in your Available Commission balance until you claim it into your main wallet.
             </p>
           </div>
 
           {/* Quick Metrics Grid */}
           <div className="grid grid-cols-2 gap-2.5 pt-1">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
               <span className="text-[11px] text-blue-200 font-medium block">
                 Total Referrals
               </span>
@@ -401,7 +398,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
             disabled={isClaiming || availableCommissionUGX <= 0 || isLoading}
             className={`w-full py-3.5 px-4 rounded-2xl font-black text-[14px] flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer ${
               availableCommissionUGX > 0 && !isClaiming
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/20 active:scale-98'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-98'
                 : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
             }`}
           >
@@ -500,7 +497,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
             <button
               id="btn-share-referral"
               onClick={handleNativeShare}
-              className="py-3 bg-gradient-to-r from-[#1657D9] to-[#2563EB] hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-[13px] rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+              className="py-3 bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
             >
               <Share2 className="w-4 h-4" />
               <span>Share Invite</span>
@@ -684,7 +681,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
       </div>
 
       {/* 20% Commission Calculation Examples */}
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-3xl p-5 border border-emerald-200/70 shadow-xs space-y-2">
+      <div className="bg-emerald-50/70 rounded-3xl p-5 border border-emerald-200/70 shadow-xs space-y-2">
         <h3 className="text-[14.5px] font-extrabold text-slate-900 flex items-center gap-2">
           <Percent className="w-4 h-4 text-emerald-600" /> 20% Deposit Commission Formula
         </h3>

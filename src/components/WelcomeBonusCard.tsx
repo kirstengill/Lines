@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Gift,
-  Sparkles,
   CheckCircle2,
   Lock,
   ArrowRight,
@@ -44,22 +43,22 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
   if (isClaimed || justClaimed) {
     return (
       <div
-        className={`bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50/50 rounded-2xl p-4 border border-emerald-200/80 shadow-2xs flex items-center justify-between gap-3 ${className}`}
+        className={`bg-[#101A14] rounded-2xl p-4 border border-emerald-500/30 shadow-2xs flex items-center justify-between gap-3 ${className}`}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30 shadow-2xs">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="text-[13.5px] font-extrabold text-slate-900 leading-tight">
+              <h4 className="text-[13.5px] font-extrabold text-white leading-tight">
                 Welcome Bonus Unlocked
               </h4>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/70 text-emerald-800 uppercase tracking-wide">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wide">
                 0% Fee Active
               </span>
             </div>
-            <p className="text-[12px] text-slate-600 mt-0.5 leading-snug">
+            <p className="text-[12px] text-slate-300 mt-0.5 leading-snug">
               UGX 4,000 welcome credit is active in your account.
             </p>
           </div>
@@ -68,13 +67,13 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
         {onOpenWithdraw ? (
           <button
             onClick={onOpenWithdraw}
-            className="text-[12px] font-bold text-emerald-800 bg-white hover:bg-emerald-100/60 px-3 py-1.5 rounded-xl border border-emerald-300 shadow-2xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+            className="text-[12px] font-bold text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1.5 rounded-xl border border-emerald-400/40 shadow-2xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
           >
             <span>Withdraw (0% Fee)</span>
-            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
+            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
           </button>
         ) : (
-          <span className="text-[13px] font-black font-mono text-emerald-700 shrink-0 bg-white/80 px-2.5 py-1 rounded-xl border border-emerald-200/60 shadow-2xs">
+          <span className="text-[13px] font-black font-mono text-emerald-400 shrink-0 bg-[#0E1712] px-2.5 py-1 rounded-xl border border-emerald-500/30 shadow-2xs">
             +UGX 4,000
           </span>
         )}
@@ -121,14 +120,12 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
   if (hasApprovedDeposit) {
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A8A] via-[#1D4ED8] to-[#1E40AF] p-4.5 text-white shadow-md border border-blue-400/30 ${className}`}
+        className={`relative overflow-hidden rounded-2xl bg-[#1A150A] p-4.5 text-white shadow-xl border border-amber-500/50 ${className}`}
       >
-        <div className="absolute -top-8 -right-8 w-28 h-28 bg-amber-400/20 rounded-full blur-xl pointer-events-none" />
-
         <div className="relative z-10 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10.5px] font-extrabold uppercase tracking-wider bg-amber-400/20 text-amber-300 px-2.5 py-1 rounded-full border border-amber-300/30 flex items-center gap-1.5 backdrop-blur-xs">
-              <Gift className="w-3.5 h-3.5 text-amber-300" />
+            <span className="text-[10.5px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1.5 backdrop-blur-xs">
+              <Gift className="w-3.5 h-3.5 text-amber-400" />
               Welcome Bonus Ready
             </span>
             <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1">
@@ -138,12 +135,11 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
           </div>
 
           <div>
-            <h3 className="text-[16.5px] font-black tracking-tight text-white flex items-center gap-2">
+            <h3 className="text-[16.5px] font-black tracking-tight text-amber-300 flex items-center gap-2">
               <span>Withdraw UGX 4,000 Welcome Bonus</span>
-              <Sparkles className="w-4 h-4 text-amber-300" />
             </h3>
-            <p className="text-[12.5px] text-blue-100/90 mt-1 leading-snug">
-              Your deposit has been approved! You can now withdraw your UGX 4,000 Welcome Bonus at <strong className="text-amber-300 font-bold">0% transaction fee</strong>, or claim it to your wallet.
+            <p className="text-[12.5px] text-slate-300 mt-1 leading-snug">
+              Your deposit has been approved! You can now withdraw your UGX 4,000 Welcome Bonus at <strong className="text-amber-400 font-bold">0% transaction fee</strong>, or claim it to your wallet.
             </p>
           </div>
 
@@ -160,11 +156,11 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
               <button
                 id="btn-withdraw-welcome-bonus-zero-fee"
                 onClick={onOpenWithdraw}
-                className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold text-[13px] rounded-xl transition-all shadow-md shadow-emerald-900/30 flex items-center justify-center gap-2 cursor-pointer"
+                className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-[0.99] text-slate-950 font-black text-[13px] rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
               >
-                <ArrowUpRight className="w-4 h-4 text-emerald-100" />
+                <ArrowUpRight className="w-4 h-4 text-slate-950" />
                 <span>Withdraw UGX 4,000</span>
-                <span className="text-[10px] font-black bg-black/20 text-emerald-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-black bg-slate-950/20 text-slate-950 px-1.5 py-0.5 rounded">
                   0% FEE
                 </span>
               </button>
@@ -175,7 +171,7 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
               id="btn-claim-welcome-bonus"
               onClick={handleClaim}
               disabled={isClaiming}
-              className={`py-2.5 px-4 ${onOpenWithdraw ? 'bg-white/10 hover:bg-white/20 text-white border border-white/20' : 'w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black'} font-bold text-[13px] rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75`}
+              className={`py-2.5 px-4 ${onOpenWithdraw ? 'bg-[#131722] hover:bg-[#1C2230] text-amber-300 border border-amber-500/40' : 'w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'} font-bold text-[13px] rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75`}
             >
               {isClaiming ? (
                 <>
@@ -198,23 +194,23 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
   // State 1: Before an approved deposit (Locked for newly registered users)
   return (
     <div
-      className={`bg-gradient-to-r from-slate-50 via-slate-100/50 to-slate-50 border border-slate-200/90 rounded-2xl p-4 shadow-2xs flex items-center justify-between gap-3.5 ${className}`}
+      className={`bg-[#131722] border border-amber-500/25 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3.5 ${className}`}
     >
       <div className="flex items-start gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-slate-200/90 text-slate-600 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-          <Lock className="w-5 h-5 text-slate-500" />
+        <div className="w-10 h-10 rounded-xl bg-[#0D1017] text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+          <Lock className="w-5 h-5 text-amber-400" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="text-[13.5px] font-extrabold text-slate-800 leading-tight">
+            <h4 className="text-[13.5px] font-extrabold text-white leading-tight">
               UGX 4,000 Welcome Bonus
             </h4>
-            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/80 border border-amber-200/60 px-2 py-0.5 rounded-full uppercase tracking-wide">
+            <span className="text-[10px] font-extrabold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase tracking-wide">
               Locked
             </span>
           </div>
-          <p className="text-[12px] text-slate-600 mt-0.5 leading-snug">
-            Your UGX 4,000 bonus is locked. Make and complete your first deposit to unlock <strong className="text-slate-800 font-semibold">0% fee withdrawal</strong> to your mobile money or bank account.
+          <p className="text-[12px] text-slate-300 mt-0.5 leading-snug">
+            Your UGX 4,000 bonus is locked. Make and complete your first deposit to unlock <strong className="text-amber-300 font-semibold">0% fee withdrawal</strong> to your mobile money or bank account.
           </p>
         </div>
       </div>
@@ -223,7 +219,7 @@ export const WelcomeBonusCard: React.FC<WelcomeBonusCardProps> = ({
         <button
           id="btn-unlock-welcome-bonus-deposit"
           onClick={onOpenDeposit}
-          className="shrink-0 px-3.5 py-2 bg-white hover:bg-slate-50 active:scale-95 text-[#1657D9] border border-blue-200 hover:border-blue-400 font-extrabold text-[12.5px] rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+          className="shrink-0 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-[12.5px] rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
         >
           <span>Deposit to Unlock</span>
           <ArrowRight className="w-3.5 h-3.5" />

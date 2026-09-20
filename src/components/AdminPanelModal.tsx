@@ -74,7 +74,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
 
           <p className="text-[11.5px] text-slate-500 leading-snug">
-            Platform multisig operations, hashrate multipliers, and withdrawal batch approvals are strictly limited to verified Administrator accounts.
+            Fleet operations, asset adjustments, and withdrawal batch approvals are strictly limited to verified Administrator accounts.
           </p>
 
           <div className="flex gap-2.5 pt-2">
@@ -90,7 +90,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   onClose();
                   onOpenAuth();
                 }}
-                className="flex-1 py-2.5 bg-[#1657D9] hover:bg-blue-700 text-white rounded-xl text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                className="flex-1 py-2.5 bg-[#0066FF] hover:bg-blue-600 text-white rounded-xl text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <LogIn className="w-4 h-4" />
                 Switch Account
@@ -151,7 +151,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            DS-Cluster Status
+            Fleet Operations
           </button>
         </div>
 
@@ -212,7 +212,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <div className="flex items-center gap-2 mt-3 pt-2 border-t border-amber-200/60">
                         <button
                           onClick={() => handleApprove(task.id)}
-                          className="flex-1 bg-[#1657D9] hover:bg-blue-700 text-white font-semibold text-[12px] py-1.5 px-3 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          className="flex-1 bg-[#0066FF] hover:bg-blue-600 text-white font-semibold text-[12px] py-1.5 px-3 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" /> Approve & Execute
                         </button>
@@ -235,7 +235,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-bold text-slate-900">
-                    Platform Hash Yield Multiplier
+                    Fleet Return Multiplier
                   </span>
                   <span className="font-mono font-bold text-blue-600 text-[14px]">
                     {rewardMultiplier.toFixed(1)}x
@@ -259,16 +259,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
               <div className="bg-[#0F172A] text-white rounded-2xl p-4 space-y-2">
                 <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-slate-400">Total DS Network Hash</span>
-                  <span className="font-mono font-bold text-emerald-400">1,842.5 TH/s</span>
+                  <span className="text-slate-400">Total Active Fleet Assets</span>
+                  <span className="font-mono font-bold text-emerald-400">248 Units</span>
                 </div>
                 <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-slate-400">Online Mining Rigs</span>
-                  <span className="font-mono font-bold">148 Units</span>
+                  <span className="text-slate-400">Active Logistics Vehicles</span>
+                  <span className="font-mono font-bold">184 Units</span>
                 </div>
                 <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-slate-400">Solar Yield Efficiency</span>
-                  <span className="font-mono font-bold text-amber-400">99.4% Irradiance</span>
+                  <span className="text-slate-400">Fleet Route Efficiency</span>
+                  <span className="font-mono font-bold text-blue-400">99.4% Dispatch</span>
                 </div>
               </div>
 
@@ -278,7 +278,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <RefreshCw className={`w-4 h-4 ${systemSyncing ? 'animate-spin' : ''}`} />
-                {systemSyncing ? 'Synchronizing Cluster...' : 'Sync DS-Mining Protocol Nodes'}
+                {systemSyncing ? 'Synchronizing Fleet...' : 'Sync Fleet Logistics Telemetry'}
               </button>
             </div>
           )}

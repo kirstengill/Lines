@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
-  Sparkles,
   Globe,
   HelpCircle,
   KeyRound,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { authService, UserAccountData, cleanReferralCode } from '../services/supabaseAuth';
 import { UserProfile } from '../types';
+import { FleetVestLogo } from './FleetVestLogo';
 
 interface AuthScreenProps {
   initialMode?: 'signin' | 'signup';
@@ -170,38 +170,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col min-h-full bg-gradient-to-b from-[#F0F4FC] via-[#F8FAFC] to-white pb-8">
+    <div className="w-full flex flex-col min-h-full bg-[#F4F6FB] pb-8">
       {/* Brand Header Banner */}
       <div className="px-6 pt-6 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#312E81] via-[#1E40AF] to-[#2563EB] flex items-center justify-center shadow-md shadow-indigo-500/30">
-            {/* SolNova brand mark: golden sun with energy bolt */}
-            <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true">
-              <defs>
-                <linearGradient id="snSun" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#FDE68A" />
-                  <stop offset="1" stopColor="#F59E0B" />
-                </linearGradient>
-              </defs>
-              <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FBBF24" strokeOpacity="0.4" strokeWidth="1" />
-              <circle cx="12" cy="12" r="4.8" fill="url(#snSun)" />
-              <path d="M12.9 7.5 l-3.1 5.1 h2.2 l-0.9 3.7 l3.1 -5.1 h-2.2 z" fill="#FFFBEB" />
-            </svg>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-[17px] font-black text-slate-900 tracking-tight leading-none">
-                SOLNOVA CAPITAL
-              </h1>
-              <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-sm">
-                DS
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">
-              Solar Mining & Investment (UGX)
-            </p>
-          </div>
-        </div>
+        <FleetVestLogo variant="dark" size="md" showTagline={false} />
 
         <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-bold text-emerald-800 shadow-2xs">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -221,7 +193,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             }}
             className={`py-2.5 text-[13px] font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mode === 'signin'
-                ? 'bg-white text-[#1657D9] shadow-sm'
+                ? 'bg-white text-[#0066FF] shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -236,11 +208,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             }}
             className={`py-2.5 text-[13px] font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mode === 'signup'
-                ? 'bg-white text-[#1657D9] shadow-sm'
+                ? 'bg-white text-[#0066FF] shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Sign Up
+            <Gift className="w-3.5 h-3.5 text-amber-500" /> Sign Up
           </button>
         </div>
       </div>
@@ -340,7 +312,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 mt-2 bg-gradient-to-r from-[#1657D9] to-[#2563EB] hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-[14.5px] rounded-2xl transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98"
+                className="w-full py-3.5 mt-2 bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold text-[14.5px] rounded-2xl transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -356,7 +328,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             /* SIGN UP / REGISTER FORM */
             <form onSubmit={handleSignUpSubmit} className="space-y-3.5">
               {/* Starter Bonus Banner (UGX 4,000 Guaranteed) */}
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-2xl p-3 flex items-center gap-2.5">
+              <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3 flex items-center gap-2.5">
                 <Gift className="w-5 h-5 text-emerald-600 shrink-0" />
                 <div>
                   <div className="text-[12px] font-extrabold text-emerald-950 flex items-center gap-1">
@@ -503,7 +475,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     type="text"
                     value={referralCode}
                     onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                    placeholder="e.g. SC-8F3K9P"
+                    placeholder="e.g. FV-8F3K9P"
                     className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono uppercase text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium transition-all"
                   />
                   {referralCode && (
@@ -552,7 +524,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     className="w-4 h-4 mt-0.5 rounded-md text-blue-600 focus:ring-blue-500 border-slate-300"
                   />
                   <span className="text-[11px] text-slate-600 leading-snug">
-                    I agree to the <span className="font-bold text-blue-600">Terms of Service</span> & UGX Sovereign Account Policies.
+                    I agree to the <span className="font-bold text-blue-600">Terms of Service</span> & Fleet Investment Policies.
                   </span>
                 </label>
               </div>
@@ -561,14 +533,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 mt-2 bg-gradient-to-r from-[#1657D9] to-[#2563EB] hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-[14px] rounded-2xl transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98"
+                className="w-full py-3.5 mt-2 bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold text-[14px] rounded-2xl transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
                     <span>Create Account & Claim UGX 4,000</span>
-                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -584,7 +556,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
-              <Globe className="w-3.5 h-3.5 text-slate-500" /> UGX Sovereign Platform
+              <Globe className="w-3.5 h-3.5 text-slate-500" /> FleetVest Logistics Platform
             </span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Machine } from '../types';
 import { InvestmentCard } from './InvestmentCard';
-import { Zap, Activity, Cpu, ArrowUpRight, Plus, Sparkles, Server, Clock, CheckCircle } from 'lucide-react';
+import { Truck, Plus, ArrowRight, ShieldCheck, Clock } from 'lucide-react';
 
 interface InvestmentsViewProps {
   machines: Machine[];
@@ -14,47 +14,50 @@ export const InvestmentsView: React.FC<InvestmentsViewProps> = ({
   onManageMachine,
   onBrowseAvailable,
 }) => {
-  // Only show active / owned machines
+  // Only show active / owned fleet assets
   const activeMachines = machines.filter(
     (m) => m.status === 'Active' || m.status === 'Maintenance'
   );
   const totalDailyUGX = activeMachines.reduce((sum, m) => sum + m.dailyRewardUGX, 0);
   const totalInvestedUGX = activeMachines.reduce((sum, m) => sum + m.minInvestUGX, 0);
-  const totalUnclaimedUGX = activeMachines.reduce((sum, m) => sum + (m.unclaimedRewardsUGX || 0), 0);
 
   return (
-    <div className="px-5 py-3 space-y-4 pb-8">
+    <div className="px-3 sm:px-5 py-3 space-y-4 pb-12">
       {/* Overview Card */}
-      <div className="bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] rounded-3xl p-5 text-white shadow-md relative overflow-hidden">
-        <div className="flex items-center justify-between text-slate-300 text-[12px] mb-1">
-          <span className="font-semibold uppercase tracking-wider text-[11px] text-blue-400">
-            Active Investment Portfolio
+      <div className="bg-[#0B192C] rounded-2xl p-5 sm:p-6 text-white shadow-md relative overflow-hidden border border-slate-800">
+        <div className="flex items-center justify-between text-slate-300 text-xs mb-2">
+          <span className="font-bold uppercase tracking-wider text-blue-400">
+            Active Fleet Portfolio
           </span>
-          <span className="flex items-center gap-1 text-emerald-400 font-semibold text-[11.5px] bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+          <span className="flex items-center gap-1 text-emerald-400 font-bold text-xs bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            {activeMachines.length} Active Nodes
+            {activeMachines.length} Active {activeMachines.length === 1 ? 'Asset' : 'Assets'}
           </span>
-        </div>
-        <div className="text-[26px] font-black font-mono text-emerald-400 mb-0.5">
-          + UGX {totalDailyUGX.toLocaleString()}
-          <span className="text-[13px] font-normal text-slate-400 ml-1">/ day</span>
-        </div>
-        <div className="text-[12px] text-slate-400">
-          Total Invested Capital: <span className="text-white font-mono font-bold">UGX {totalInvestedUGX.toLocaleString()}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-700/60 text-center">
-          <div className="bg-white/5 rounded-xl p-2">
-            <span className="text-[10px] text-slate-400 block font-medium">Avg ROI</span>
-            <span className="text-[13px] font-black text-white">128.3%</span>
+        <div className="text-2xl sm:text-3xl font-black text-emerald-400 mb-1">
+          +UGX {totalDailyUGX.toLocaleString()}
+          <span className="text-xs sm:text-sm font-normal text-slate-400 ml-1.5">/ day</span>
+        </div>
+
+        <div className="text-xs text-slate-400">
+          Total Invested Capital: <span className="text-white font-bold">UGX {totalInvestedUGX.toLocaleString()}</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mt-4 pt-3.5 border-t border-slate-800 text-center">
+          <div className="bg-white/5 rounded-xl p-2.5">
+            <span className="text-[10px] text-slate-400 block font-semibold">Asset Status</span>
+            <span className="text-xs sm:text-sm font-black text-emerald-400">100% Operational</span>
           </div>
-          <div className="bg-white/5 rounded-xl p-2">
-            <span className="text-[10px] text-slate-400 block font-medium">Fleet Hash</span>
-            <span className="text-[13px] font-black text-sky-400 font-mono">383.0 TH/s</span>
+          <div className="bg-white/5 rounded-xl p-2.5">
+            <span className="text-[10px] text-slate-400 block font-semibold">Network</span>
+            <span className="text-xs sm:text-sm font-black text-sky-400">Fleet Operations</span>
           </div>
-          <div className="bg-white/5 rounded-xl p-2">
-            <span className="text-[10px] text-slate-400 block font-medium">Uptime</span>
-            <span className="text-[13px] font-black text-emerald-400 font-mono">99.92%</span>
+          <div className="bg-white/5 rounded-xl p-2.5">
+            <span className="text-[10px] text-slate-400 block font-semibold">Security</span>
+            <span className="text-xs sm:text-sm font-black text-blue-400 flex items-center justify-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5" /> Insured
+            </span>
           </div>
         </div>
       </div>
@@ -63,42 +66,43 @@ export const InvestmentsView: React.FC<InvestmentsViewProps> = ({
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <div>
-            <h3 className="text-[16px] font-bold text-[#0F172A]">
-              Your Active Nodes ({activeMachines.length})
+            <h3 className="text-base font-extrabold text-[#0B192C]">
+              Your Active Fleet Assets ({activeMachines.length})
             </h3>
-            <p className="text-[11.5px] text-slate-500">
-              Hardware units deployed and generating continuous yield
+            <p className="text-xs text-slate-500 mt-0.5">
+              Working vehicles and transport units generating consistent revenue
             </p>
           </div>
           {onBrowseAvailable && (
             <button
               onClick={onBrowseAvailable}
-              className="text-[11.5px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100"
+              className="text-xs font-bold text-[#0066FF] hover:text-blue-700 flex items-center gap-1 cursor-pointer bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100"
             >
-              <Plus className="w-3.5 h-3.5" /> New Node
+              <Plus className="w-3.5 h-3.5" /> Add Asset
             </button>
           )}
         </div>
 
         {activeMachines.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center space-y-3 shadow-xs">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-100">
-              <Server className="w-7 h-7" />
+          <div className="bg-white rounded-2xl p-8 border border-slate-200/90 text-center space-y-3 shadow-xs">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0066FF] flex items-center justify-center mx-auto border border-blue-100">
+              <Truck className="w-7 h-7" />
             </div>
             <div>
-              <h4 className="text-[15px] font-bold text-slate-900">
-                No Active Investments Yet
+              <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                No Active Fleet Assets Yet
               </h4>
-              <p className="text-[12.5px] text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
-                You haven't activated any mining nodes or clean energy investments yet. Browse available opportunities to start earning daily yield in UGX.
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 leading-relaxed">
+                You haven't invested in any transport vehicles or logistics units yet. Browse the fleet marketplace to start earning daily returns in UGX.
               </p>
             </div>
             {onBrowseAvailable && (
               <button
                 onClick={onBrowseAvailable}
-                className="px-5 py-2.5 bg-[#1657D9] hover:bg-blue-700 text-white rounded-xl text-[13px] font-bold shadow-sm transition-all cursor-pointer inline-flex items-center gap-1.5"
+                className="px-5 py-2.5 bg-[#0066FF] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer inline-flex items-center gap-1.5"
               >
-                <Sparkles className="w-4 h-4" /> Explore Available Investments
+                <span>Browse Fleet Marketplace</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -118,3 +122,4 @@ export const InvestmentsView: React.FC<InvestmentsViewProps> = ({
     </div>
   );
 };
+

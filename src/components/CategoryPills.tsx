@@ -1,28 +1,30 @@
 import React from 'react';
 
-export type CategoryType = 'VIP Products' | 'Clean Energy' | 'DS-Mining' | 'All';
+export type CategoryType =
+  | 'All'
+  | 'Urban Delivery'
+  | 'Passenger Transport'
+  | 'Freight & Cargo'
+  | 'Fleet Operations'
+  | string;
 
 interface CategoryPillsProps {
-  selectedCategory: CategoryType;
-  onSelectCategory: (category: CategoryType) => void;
-  counts: {
-    vip: number;
-    cleanEnergy: number;
-    dsMining: number;
-    all: number;
-  };
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
+  counts?: Record<string, number>;
 }
 
 export const CategoryPills: React.FC<CategoryPillsProps> = ({
   selectedCategory,
   onSelectCategory,
-  counts,
+  counts = {},
 }) => {
-  const categories: { key: CategoryType; label: string; count?: number }[] = [
-    { key: 'VIP Products', label: 'VIP Products', count: counts.vip },
-    { key: 'Clean Energy', label: 'Clean Energy', count: counts.cleanEnergy },
-    { key: 'DS-Mining', label: 'DS-Mining', count: counts.dsMining },
-    { key: 'All', label: 'All', count: undefined },
+  const categories: { key: string; label: string }[] = [
+    { key: 'All', label: 'All Fleet' },
+    { key: 'Urban Delivery', label: 'Urban Delivery' },
+    { key: 'Passenger Transport', label: 'Passenger' },
+    { key: 'Freight & Cargo', label: 'Freight & Cargo' },
+    { key: 'Fleet Operations', label: 'Fleet Ops' },
   ];
 
   return (
@@ -30,17 +32,18 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
         {categories.map((cat) => {
           const isActive = selectedCategory === cat.key;
-          const displayLabel = cat.count !== undefined ? `${cat.label} (${cat.count})` : cat.label;
+          const count = counts[cat.key];
+          const displayLabel = count !== undefined ? `${cat.label} (${count})` : cat.label;
 
           return (
             <button
               key={cat.key}
               id={`pill-cat-${cat.key.toLowerCase().replace(/\s+/g, '-')}`}
               onClick={() => onSelectCategory(cat.key)}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-[13.5px] font-medium transition-all duration-200 shrink-0 ${
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 shrink-0 cursor-pointer ${
                 isActive
-                  ? 'bg-[#DBEAFE] text-[#0F172A] border border-[#BFDBFE] font-semibold shadow-xs'
-                  : 'bg-white/80 hover:bg-white text-slate-600 border border-slate-200/80'
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-black'
+                  : 'bg-[#131722] hover:bg-[#1A202E] text-slate-300 border border-amber-500/20'
               }`}
             >
               {displayLabel}
@@ -51,3 +54,4 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({
     </div>
   );
 };
+
