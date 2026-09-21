@@ -115,12 +115,13 @@ export interface UserProfile {
   id: string;
   username: string;
   fullName: string;
+  email?: string;
   phone?: string;
   status?: 'active' | 'blocked';
-  role?: 'admin' | 'user';
+  role?: 'admin' | 'user' | 'investor';
   isAdmin?: boolean;
   welcomeBonusClaimed?: boolean;
-  tier: 'VIP 2 Elite' | 'Standard' | 'VIP 3 Sovereign';
+  tier: string;
   memberSince: string;
   createdAt?: string;
   verified: boolean;
@@ -154,9 +155,10 @@ export interface AdminUserSummary {
   id: string;
   username: string;
   fullName: string;
+  email?: string;
   phone?: string;
   status: 'active' | 'blocked';
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'investor';
   isAdmin: boolean;
   tier: string;
   memberSince: string;
@@ -204,5 +206,16 @@ export interface UserAccountData {
   machines: Machine[];
   adminTasks: AdminTask[];
   notifications: AppNotification[];
+}
+
+export interface SystemSettings {
+  referralPercentage: number;
+  minWithdrawUGX: number;
+  minDepositUGX?: number;
+  withdrawalFeeRate?: number;
+  welcomeBonusUGX?: number;
+  dailyRewardRate?: number;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 

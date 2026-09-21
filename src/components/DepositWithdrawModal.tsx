@@ -20,16 +20,15 @@ import {
 import confetti from 'canvas-confetti';
 import { WHATSAPP_HELP_URL } from '../constants/links';
 import { authService } from '../services/supabaseAuth';
+import { systemSettingsService } from '../services/systemSettings';
+import { SystemSettings } from '../types';
 
-// Withdrawal rules
-const MIN_WITHDRAWAL_UGX = 10000;
-const WITHDRAWAL_FEE_RATE = 0.15; // 15% standard transaction fee
-
-// Helper to calculate maximum receive amount after 15% fee from a given balance
-export const calculateMaxWithdrawal = (balance: number): number => {
+// Helper to calculate maximum receive amount after transaction fee from a given balance
+export const calculateMaxWithdrawal = (balance: number, feeRate?: number): number => {
   if (balance <= 0) return 0;
-  let max = Math.floor(balance / (1 + WITHDRAWAL_FEE_RATE));
-  while (max > 0 && max + Math.round(max * WITHDRAWAL_FEE_RATE) > balance) {
+  const rate = feeRate !== undefined ? feeRate : systemSettingsService.getWithdrawalFeeRate();
+  let max = Math.floor(balance / (1 + rate));
+  while (max > 0 && max + Math.round(max * rate) > balance) {
     max--;
   }
   return max;
@@ -67,6 +66,16 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   onSuccess,
 }) => {
   const currentUser = authService.getCurrentUser();
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => systemSettingsService.getSettings());
+
+  useEffect(() => {
+    const unsub = systemSettingsService.subscribe((s) => setSystemSettings(s));
+    return unsub;
+  }, []);
+
+  const minWithdrawalUGX = systemSettings.minWithdrawUGX;
+  const withdrawalFeeRate = systemSettings.withdrawalFeeRate;
+
   const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
   const [isWelcomeBonus, setIsWelcomeBonus] = useState<boolean>(initialIsWelcomeBonus);
 
@@ -75,11 +84,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       return '4000';
     }
     if (mode === 'withdraw') {
-      const maxPossible = calculateMaxWithdrawal(balanceUGX);
-      if (maxPossible >= MIN_WITHDRAWAL_UGX) {
+      const currentMin = systemSettingsService.getMinWithdrawUGX();
+      const currentFee = systemSettingsService.getWithdrawalFeeRate();
+      const maxPossible = calculateMaxWithdrawal(balanceUGX, currentFee);
+      if (maxPossible >= currentMin) {
         return Math.min(maxPossible, 50000).toString();
       }
-      return MIN_WITHDRAWAL_UGX.toString();
+      return currentMin.toString();
     }
     return '50000';
   });
@@ -122,13 +133,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
   // Fee calculation:
   // When isWelcomeBonus is true, 0% fee applies.
-  // Otherwise standard 15% fee applies.
+  // Otherwise standard fee applies (from settings).
   const requestedWithdrawalUGX = mode === 'withdraw' ? numUGX : 0;
   const withdrawalFeeUGX =
     mode === 'withdraw'
       ? isWelcomeBonus
         ? 0
-        : Math.round(requestedWithdrawalUGX * WITHDRAWAL_FEE_RATE)
+        : Math.round(requestedWithdrawalUGX * withdrawalFeeRate)
       : 0;
   const totalDeductionUGX =
     mode === 'withdraw'
@@ -164,9 +175,9 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
     // Minimum withdrawal amount & balance verification
     if (mode === 'withdraw') {
-      if (requestedWithdrawalUGX < MIN_WITHDRAWAL_UGX) {
+      if (requestedWithdrawalUGX < minWithdrawalUGX) {
         setErrorMessage(
-          `Minimum Withdrawal: The minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_UGX.toLocaleString()}.`
+          `Minimum Withdrawal: The minimum withdrawal amount is UGX ${minWithdrawalUGX.toLocaleString()}.`
         );
         return;
       }
@@ -180,7 +191,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
         // Standard withdrawal balance validation
         if (totalDeductionUGX > balanceUGX) {
           setErrorMessage(
-            `Insufficient balance. You need UGX ${totalDeductionUGX.toLocaleString()} including the 15% transaction fee.`
+            `Insufficient balance. You need UGX ${totalDeductionUGX.toLocaleString()} including the ${Math.round(withdrawalFeeRate * 100)}% transaction fee.`
           );
           return;
         }
@@ -520,7 +531,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                       : 'Withdrawal Amount (You Receive)'}
                   {mode === 'withdraw' && !isWelcomeBonus && (
                     <span className="ml-1.5 text-[10.5px] font-bold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
-                      Min: UGX {MIN_WITHDRAWAL_UGX.toLocaleString()}
+                      Min: UGX {minWithdrawalUGX.toLocaleString()}
                     </span>
                   )}
                 </span>
@@ -537,7 +548,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   value={amountUGXStr}
                   disabled={isWelcomeBonus}
                   onChange={(e) => setAmountUGXStr(e.target.value)}
-                  placeholder={mode === 'deposit' ? '50000' : '10000'}
+                  placeholder={mode === 'deposit' ? '50000' : minWithdrawalUGX.toString()}
                   className={`w-full pl-12 pr-4 py-2.5 rounded-xl font-bold text-[16px] focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-mono ${
                     isWelcomeBonus
                       ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 cursor-not-allowed'

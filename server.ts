@@ -28,9 +28,10 @@ export interface ServerUserRecord {
   username: string;
   passwordHash: string;
   fullName: string;
+  email?: string;
   phone?: string;
   status: 'active' | 'blocked';
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'investor';
   isAdmin: boolean;
   tier: string;
   referralCode: string;
@@ -838,6 +839,10 @@ app.post('/api/admin/catalog/machines', requireAuth, requireAdmin, (req: Request
     status,
     estYearlyROI,
     minInvestUGX,
+    cyclePeriodDays,
+    cyclePeriod,
+    projectedReturnUGX,
+    vehicleType,
     hashrate,
     powerSource,
     uptime,
@@ -849,22 +854,31 @@ app.post('/api/admin/catalog/machines', requireAuth, requireAdmin, (req: Request
     return res.status(400).json({ error: 'Project Title and Minimum Investment amount are required.' });
   }
 
+  const cycleDays = Number(cyclePeriodDays) || 60;
+  const cycleLabel = cyclePeriod || `${cycleDays} days`;
+  const dailyRew = Number(dailyRewardUGX) || 3500;
+  const projReturn = Number(projectedReturnUGX) || (dailyRew * cycleDays);
+
   const newMachine: CatalogMachine = {
     id: `mach_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     title: title.trim(),
     subtitle: subtitle ? subtitle.trim() : undefined,
-    category: category || 'DS-Mining',
+    category: category || 'Urban Delivery',
     image:
       image ||
-      'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-    dailyRewardUGX: Number(dailyRewardUGX) || 250000,
+      'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=80',
+    dailyRewardUGX: dailyRew,
     status: status || 'Active',
     estYearlyROI: Number(estYearlyROI) || 120,
     minInvestUGX: Math.round(Number(minInvestUGX)),
-    hashrate: hashrate || '60.0 TH/s',
-    powerSource: powerSource || 'Clean Energy Array',
+    cyclePeriodDays: cycleDays,
+    cyclePeriod: cycleLabel,
+    projectedReturnUGX: projReturn,
+    vehicleType: vehicleType || 'bike',
+    hashrate: hashrate || 'Commercial 150cc',
+    powerSource: powerSource || 'Hybrid Fuel Injection + Telematics',
     uptime: uptime || '99.9%',
-    temperature: temperature || '38.0°C',
+    temperature: temperature || 'Optimal',
     efficiency: Number(efficiency) || 99.0,
     totalMinedUGX: 0,
     unclaimedRewardsUGX: 0,
@@ -901,6 +915,10 @@ app.put('/api/admin/catalog/machines/:id', requireAuth, requireAdmin, (req: Requ
     status,
     estYearlyROI,
     minInvestUGX,
+    cyclePeriodDays,
+    cyclePeriod,
+    projectedReturnUGX,
+    vehicleType,
     hashrate,
     powerSource,
     uptime,
@@ -908,16 +926,27 @@ app.put('/api/admin/catalog/machines/:id', requireAuth, requireAdmin, (req: Requ
     efficiency,
   } = req.body;
 
+  const cycleDays = cyclePeriodDays !== undefined ? Number(cyclePeriodDays) : existing.cyclePeriodDays;
+  const cycleLabel = cyclePeriod !== undefined ? cyclePeriod : (cycleDays ? `${cycleDays} days` : existing.cyclePeriod);
+  const dailyRew = dailyRewardUGX !== undefined ? Number(dailyRewardUGX) : existing.dailyRewardUGX;
+  const projReturn = projectedReturnUGX !== undefined 
+    ? Number(projectedReturnUGX) 
+    : (cycleDays ? dailyRew * cycleDays : existing.projectedReturnUGX);
+
   const updated: CatalogMachine = {
     ...existing,
     title: title !== undefined ? title.trim() : existing.title,
     subtitle: subtitle !== undefined ? subtitle.trim() : existing.subtitle,
     category: category !== undefined ? category : existing.category,
     image: image !== undefined ? image : existing.image,
-    dailyRewardUGX: dailyRewardUGX !== undefined ? Number(dailyRewardUGX) : existing.dailyRewardUGX,
+    dailyRewardUGX: dailyRew,
     status: status !== undefined ? status : existing.status,
     estYearlyROI: estYearlyROI !== undefined ? Number(estYearlyROI) : existing.estYearlyROI,
     minInvestUGX: minInvestUGX !== undefined ? Math.round(Number(minInvestUGX)) : existing.minInvestUGX,
+    cyclePeriodDays: cycleDays,
+    cyclePeriod: cycleLabel,
+    projectedReturnUGX: projReturn,
+    vehicleType: vehicleType !== undefined ? vehicleType : existing.vehicleType,
     hashrate: hashrate !== undefined ? hashrate : existing.hashrate,
     powerSource: powerSource !== undefined ? powerSource : existing.powerSource,
     uptime: uptime !== undefined ? uptime : existing.uptime,
@@ -1366,7 +1395,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req: Request, res: Respo
   res.json({ users: usersList });
 });
 
-// Admin: Edit User Info (Username, Full Name, Phone)
+// Admin: Edit User Info (Username, Full Name, Phone, Email, Role, Status, Tier, Referral Code)
 app.put('/api/admin/users/:id', requireAuth, requireAdmin, (req: Request, res: Response) => {
   const targetId = req.params.id;
   const record = serverDatabase[targetId];
@@ -1375,7 +1404,7 @@ app.put('/api/admin/users/:id', requireAuth, requireAdmin, (req: Request, res: R
     return res.status(404).json({ error: 'User record not found.' });
   }
 
-  const { username, fullName, phone } = req.body;
+  const { username, fullName, phone, email, role, isAdmin, status, tier, referralCode } = req.body;
 
   // If changing username, ensure uniqueness
   if (username && username.trim().toLowerCase() !== record.user.username.toLowerCase()) {
@@ -1396,6 +1425,26 @@ app.put('/api/admin/users/:id', requireAuth, requireAdmin, (req: Request, res: R
   }
   if (phone !== undefined) {
     record.user.phone = phone.trim();
+  }
+  if (email !== undefined) {
+    record.user.email = email.trim();
+  }
+  if (role !== undefined) {
+    record.user.role = role === 'admin' ? 'admin' : 'investor';
+    record.user.isAdmin = role === 'admin';
+  }
+  if (isAdmin !== undefined) {
+    record.user.isAdmin = Boolean(isAdmin);
+    if (isAdmin) record.user.role = 'admin';
+  }
+  if (status !== undefined) {
+    record.user.status = status;
+  }
+  if (tier !== undefined) {
+    record.user.tier = tier;
+  }
+  if (referralCode !== undefined) {
+    record.user.referralCode = referralCode.trim();
   }
 
   saveDatabaseToDisk();
@@ -1561,6 +1610,51 @@ app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req: Request, res
 // Admin: Get Balance Adjustments Audit Log
 app.get('/api/admin/audit/balance-adjustments', requireAuth, requireAdmin, (req: Request, res: Response) => {
   res.json({ adjustments: balanceAdjustments });
+});
+
+// ==========================================
+// SYSTEM SETTINGS & CONFIGURATION
+// ==========================================
+let systemSettingsDatabase = {
+  referralPercentage: 20,
+  minWithdrawUGX: 10000,
+  withdrawalFeeRate: 0.15,
+  dailyRewardRate: 0.05,
+  welcomeBonusUGX: 4000,
+  updatedAt: new Date().toISOString(),
+};
+
+// Public: Get global system settings
+app.get('/api/settings', (req: Request, res: Response) => {
+  res.json({ settings: systemSettingsDatabase });
+});
+
+// Admin: Update global system settings
+app.put('/api/admin/settings', requireAuth, requireAdmin, (req: Request, res: Response) => {
+  const { referralPercentage, minWithdrawUGX, withdrawalFeeRate, dailyRewardRate, welcomeBonusUGX } = req.body;
+  if (referralPercentage !== undefined) {
+    systemSettingsDatabase.referralPercentage = Math.max(0, Math.min(100, Number(referralPercentage)));
+  }
+  if (minWithdrawUGX !== undefined) {
+    systemSettingsDatabase.minWithdrawUGX = Math.max(1000, Math.round(Number(minWithdrawUGX)));
+  }
+  if (withdrawalFeeRate !== undefined) {
+    systemSettingsDatabase.withdrawalFeeRate = Math.max(0, Math.min(0.5, Number(withdrawalFeeRate)));
+  }
+  if (dailyRewardRate !== undefined) {
+    systemSettingsDatabase.dailyRewardRate = Math.max(0, Number(dailyRewardRate));
+  }
+  if (welcomeBonusUGX !== undefined) {
+    systemSettingsDatabase.welcomeBonusUGX = Math.max(0, Math.round(Number(welcomeBonusUGX)));
+  }
+  systemSettingsDatabase.updatedAt = new Date().toISOString();
+  saveDatabaseToDisk();
+
+  res.json({
+    success: true,
+    message: 'System settings updated successfully.',
+    settings: systemSettingsDatabase,
+  });
 });
 
 // ==========================================

@@ -16,10 +16,12 @@ import {
   AppNotification,
   AdminUserSummary,
   BalanceAdjustment,
+  SystemSettings,
 } from '../types';
 import { supabaseAdmin } from './supabaseAdmin';
 import { getSupabaseClient } from './supabase';
 import { apiClient } from './apiClient';
+import { systemSettingsService } from './systemSettings';
 
 export interface UserAccountData {
   wallet: WalletState;
@@ -1453,14 +1455,42 @@ class AuthService {
 
   public async updateUserInfo(
     userId: string,
-    data: { username?: string; fullName?: string; phone?: string; status?: 'active' | 'blocked' }
+    data: {
+      username?: string;
+      fullName?: string;
+      phone?: string;
+      email?: string;
+      role?: 'user' | 'admin';
+      isAdmin?: boolean;
+      status?: 'active' | 'blocked';
+      tier?: string;
+      referralCode?: string;
+    }
   ) {
     const res = await supabaseAdmin.updateAdminUser(userId, data);
     // Keep the locally signed-in user in sync when the admin edits THEIR OWN account
-    if (res.success && this.currentUser && this.currentUser.id === userId && data.fullName !== undefined) {
-      this.currentUser = { ...this.currentUser, fullName: data.fullName, phone: data.phone ?? this.currentUser.phone };
+    if (res.success && this.currentUser && this.currentUser.id === userId) {
+      this.currentUser = {
+        ...this.currentUser,
+        fullName: data.fullName ?? this.currentUser.fullName,
+        phone: data.phone ?? this.currentUser.phone,
+        email: data.email ?? this.currentUser.email,
+        role: data.role ?? this.currentUser.role,
+        isAdmin: data.isAdmin !== undefined ? data.isAdmin : (data.role === 'admin' ? true : this.currentUser.isAdmin),
+      };
     }
     return res;
+  }
+
+  public async fetchSystemSettings(): Promise<{ settings: SystemSettings; error?: string }> {
+    const settings = await systemSettingsService.fetchSettings();
+    return { settings };
+  }
+
+  public async updateSystemSettings(
+    settings: Partial<SystemSettings>
+  ): Promise<{ success: boolean; settings?: SystemSettings; error?: string }> {
+    return systemSettingsService.updateSettings(settings);
   }
 
   public async adjustBalance(

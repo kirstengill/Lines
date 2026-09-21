@@ -91,7 +91,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "• Referral Commission: You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
           "• Example: If your invited partner deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.";
       } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('return') || lower.includes('payout')) {
-        reply = "Daily returns accumulate continuously from active fleet operations. Simply tap 'Claim' on any active vehicle asset in your Dashboard or Active Assets section to credit the UGX directly into your Consolidated Wallet!";
+        reply = "Daily returns accumulate continuously from active fleet operations. Simply tap 'Claim' on any active vehicle asset in your Dashboard or Active Assets section to credit the UGX directly into your Fleet Treasury!";
       } else if (lower.includes('bank') || lower.includes('stanbic')) {
         reply = "Bank Transfer Details (Withdrawals):\n• Bank: Stanbic Bank Uganda Limited\n• Account Number: 9030018829104\n• Account Name: FleetVest Logistics Uganda Ltd\n• Branch: Forest Mall Lugogo, Kampala\n\nNote: Deposits are processed via MTN MoMo and Airtel Money to 0766495353.";
       }

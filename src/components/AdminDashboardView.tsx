@@ -41,7 +41,10 @@ import {
   Tag,
   Wallet,
   UploadCloud,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sliders,
+  Settings,
+  Percent,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -51,8 +54,10 @@ import {
   Machine,
   AdminUserSummary,
   BalanceAdjustment,
+  SystemSettings,
 } from '../types';
 import { authService } from '../services/supabaseAuth';
+import { systemSettingsService } from '../services/systemSettings';
 import { apiClient } from '../services/apiClient';
 import { getSupabaseClient } from '../services/supabase';
 import { ProjectImage } from './ProjectImage';
@@ -66,7 +71,7 @@ interface AdminDashboardViewProps {
   onTransactionApproved?: () => void;
 }
 
-type AdminSubTab = 'transactions' | 'users' | 'catalog' | 'audit' | 'cluster' | 'nodes' | 'tasks';
+type AdminSubTab = 'transactions' | 'users' | 'catalog' | 'audit' | 'cluster' | 'nodes' | 'tasks' | 'settings';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   tasks,
@@ -114,8 +119,35 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [editUsername, setEditUsername] = useState('');
   const [editFullName, setEditFullName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'investor'>('investor');
+  const [editStatus, setEditStatus] = useState<'active' | 'blocked'>('active');
+  const [editTier, setEditTier] = useState('VIP 1 Standard');
+  const [editReferralCode, setEditReferralCode] = useState('');
   const [editUserLoading, setEditUserLoading] = useState(false);
   const [editUserError, setEditUserError] = useState('');
+
+  // System Settings State
+  const [currentSettings, setCurrentSettings] = useState<SystemSettings>(() => systemSettingsService.getSettings());
+  const [editReferralPct, setEditReferralPct] = useState<number>(() => systemSettingsService.getReferralPercentage());
+  const [editMinWithdraw, setEditMinWithdraw] = useState<number>(() => systemSettingsService.getMinWithdrawUGX());
+  const [editWithdrawFeeRate, setEditWithdrawFeeRate] = useState<number>(() => Math.round(systemSettingsService.getWithdrawalFeeRate() * 100));
+  const [editWelcomeBonus, setEditWelcomeBonus] = useState<number>(() => systemSettingsService.getSettings().welcomeBonusUGX);
+  const [editDailyRewardRate, setEditDailyRewardRate] = useState<number>(() => Math.round(systemSettingsService.getSettings().dailyRewardRate * 100));
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsFeedback, setSettingsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    const unsub = systemSettingsService.subscribe((s) => {
+      setCurrentSettings(s);
+      setEditReferralPct(s.referralPercentage);
+      setEditMinWithdraw(s.minWithdrawUGX);
+      setEditWithdrawFeeRate(Math.round(s.withdrawalFeeRate * 100));
+      setEditWelcomeBonus(s.welcomeBonusUGX);
+      setEditDailyRewardRate(Math.round(s.dailyRewardRate * 100));
+    });
+    return unsub;
+  }, []);
 
   const [adjustingUser, setAdjustingUser] = useState<AdminUserSummary | null>(null);
   const [adjustAmount, setAdjustAmount] = useState<string>('');
@@ -331,6 +363,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setEditUsername(u.username);
     setEditFullName(u.fullName || '');
     setEditPhone(u.phone || '');
+    setEditEmail(u.email || '');
+    setEditRole(u.role === 'admin' || u.isAdmin ? 'admin' : 'investor');
+    setEditStatus(u.status === 'blocked' ? 'blocked' : 'active');
+    setEditTier(u.tier || 'VIP 1 Standard');
+    setEditReferralCode(u.referralCode || '');
     setEditUserError('');
   };
 
@@ -345,6 +382,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         username: editUsername.trim(),
         fullName: editFullName.trim(),
         phone: editPhone.trim(),
+        email: editEmail.trim(),
+        role: editRole,
+        isAdmin: editRole === 'admin',
+        status: editStatus,
+        tier: editTier,
+        referralCode: editReferralCode.trim(),
       });
 
       if (res.error) {
@@ -358,6 +401,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setEditUserError(err.message || 'Failed to update user.');
     } finally {
       setEditUserLoading(false);
+    }
+  };
+
+  // Handle Save Global System Settings (Referral %, Min Withdraw, etc.)
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setSettingsFeedback(null);
+    try {
+      const res = await systemSettingsService.updateSettings({
+        referralPercentage: Math.max(0, Math.min(100, Number(editReferralPct))),
+        minWithdrawUGX: Math.max(1000, Math.round(Number(editMinWithdraw))),
+        withdrawalFeeRate: Math.max(0, Math.min(50, Number(editWithdrawFeeRate))) / 100,
+        welcomeBonusUGX: Math.max(0, Math.round(Number(editWelcomeBonus))),
+        dailyRewardRate: Math.max(0, Number(editDailyRewardRate)) / 100,
+      });
+
+      if (!res.success) {
+        setSettingsFeedback({ type: 'error', message: res.error || 'Failed to save system settings.' });
+      } else {
+        setSettingsFeedback({ type: 'success', message: 'System settings saved and synchronized successfully.' });
+        showToast('System configuration updated in Supabase.');
+      }
+    } catch (err: any) {
+      setSettingsFeedback({ type: 'error', message: err.message || 'Error updating settings.' });
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -959,6 +1029,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               {pendingTasksCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('settings')}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
+            activeSubTab === 'settings'
+              ? 'bg-[#0066FF] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>System Settings</span>
+          <span className="bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
+            {currentSettings.referralPercentage}% ref
+          </span>
         </button>
       </div>
 
@@ -2045,9 +2130,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         />
                       </div>
                       <div>
-                        <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                          {proj.category}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                            {proj.category}
+                          </span>
+                          {(proj.cyclePeriod || proj.cyclePeriodDays) && (
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                              {proj.cyclePeriod || `${proj.cyclePeriodDays} Days`}
+                            </span>
+                          )}
+                          {proj.vehicleType && (
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
+                              {proj.vehicleType}
+                            </span>
+                          )}
+                        </div>
                         <h4 className="text-[14px] font-extrabold text-slate-900 mt-1">
                           {proj.title}
                         </h4>
@@ -2069,15 +2166,22 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10.5px]">Yearly ROI</span>
-                        <span className="font-bold text-blue-600">{proj.estYearlyROI}%</span>
+                        <span className="text-slate-400 block text-[10.5px]">Cycle Period</span>
+                        <span className="font-bold text-purple-700">
+                          {proj.cyclePeriod || (proj.cyclePeriodDays ? `${proj.cyclePeriodDays} Days` : 'Continuous')}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10.5px]">Vehicle Spec</span>
-                        <span className="font-mono font-bold text-slate-700">{proj.hashrate}</span>
+                        <span className="text-slate-400 block text-[10.5px]">Projected Return</span>
+                        <span className="font-mono font-bold text-blue-700">
+                          {proj.projectedReturnUGX
+                            ? `UGX ${proj.projectedReturnUGX.toLocaleString()}`
+                            : `${proj.estYearlyROI}% ROI`}
+                        </span>
                       </div>
                     </div>
                   </div>
+
 
                   <div className="p-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
                     <span
@@ -2365,21 +2469,391 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* ==========================================
-          MODALS FOR USER & PROJECT MANAGEMENT
+          TAB 8: GLOBAL SYSTEM SETTINGS & PARAMETERS
           ========================================== */}
+      {activeSubTab === 'settings' && (
+        <div className="space-y-4">
+          {/* Header Banner */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Sliders className="w-5 h-5" />
+                </span>
+                <h3 className="text-[16px] font-extrabold text-slate-900">
+                  System Configuration & Platform Parameters
+                </h3>
+              </div>
+              <p className="text-[12px] text-slate-500 mt-1">
+                Configure global financial rules: referral commission percentage, minimum withdrawal limits, gateway processing fees, and starter bonuses. Changes are synchronized across Supabase and active user portals.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live Supabase Sync Active
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Referral Rate</span>
+                <Percent className="w-4 h-4 text-purple-500" />
+              </div>
+              <div className="text-[22px] font-black text-slate-900">
+                {currentSettings.referralPercentage}%
+              </div>
+              <p className="text-[10.5px] text-slate-500 mt-0.5">Tier 1 invite commission</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Min Withdrawal</span>
+                <Wallet className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-[18px] font-black text-slate-900 font-mono">
+                UGX {currentSettings.minWithdrawUGX.toLocaleString()}
+              </div>
+              <p className="text-[10.5px] text-slate-500 mt-0.5">Cashout lower threshold</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Withdraw Fee</span>
+                <ArrowUpRight className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-[22px] font-black text-slate-900">
+                {Math.round(currentSettings.withdrawalFeeRate * 100)}%
+              </div>
+              <p className="text-[10.5px] text-slate-500 mt-0.5">Gateway & network fee</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Welcome Bonus</span>
+                <Sparkles className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-[18px] font-black text-slate-900 font-mono">
+                UGX {currentSettings.welcomeBonusUGX.toLocaleString()}
+              </div>
+              <p className="text-[10.5px] text-slate-500 mt-0.5">Signup wallet grant</p>
+            </div>
+          </div>
+
+          {/* Feedback message banner */}
+          {settingsFeedback && (
+            <div
+              className={`p-3.5 rounded-2xl border text-[12.5px] font-semibold flex items-center justify-between ${
+                settingsFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {settingsFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                )}
+                <span>{settingsFeedback.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsFeedback(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* System Settings Form */}
+          <form onSubmit={handleSaveSettings} className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+            {/* Setting 1: Referral Percentage */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-[13.5px] font-extrabold text-slate-900 flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-purple-600" />
+                    Referral Commission Percentage (%)
+                  </label>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5">
+                    Percentage rewarded to the inviter on machine purchases and rental packages by their direct referrals.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={editReferralPct}
+                      onChange={(e) => setEditReferralPct(Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-xl text-right font-mono font-extrabold text-[15px] text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                    />
+                    <span className="absolute right-2.5 top-2.5 text-slate-400 font-bold text-[13px] pointer-events-none">
+                      %
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slider Control */}
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={editReferralPct}
+                onChange={(e) => setEditReferralPct(Number(e.target.value))}
+                className="w-full accent-purple-600 h-2 bg-slate-200 rounded-lg cursor-pointer"
+              />
+
+              {/* Quick preset buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] text-slate-400 font-medium">Quick Presets:</span>
+                {[10, 15, 20, 25, 30].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setEditReferralPct(pct)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      editReferralPct === pct
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+
+              {/* Live Impact Preview */}
+              <div className="bg-white p-3 rounded-xl border border-purple-100 text-[11.5px] text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-slate-800">Commission Payout Preview:</span>
+                <span>
+                  Invest UGX 50,000 &rarr; <strong className="text-purple-700 font-mono">UGX {Math.round(50000 * (editReferralPct / 100)).toLocaleString()}</strong>
+                </span>
+                <span>
+                  Invest UGX 500,000 &rarr; <strong className="text-purple-700 font-mono">UGX {Math.round(500000 * (editReferralPct / 100)).toLocaleString()}</strong>
+                </span>
+                <span>
+                  Invest UGX 5,000,000 &rarr; <strong className="text-purple-700 font-mono">UGX {Math.round(5000000 * (editReferralPct / 100)).toLocaleString()}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Setting 2: Minimum Withdrawal */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-[13.5px] font-extrabold text-slate-900 flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-emerald-600" />
+                    Minimum Withdrawal Amount (UGX)
+                  </label>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5">
+                    The minimum wallet balance required for users to initiate an MTN Mobile Money or Airtel Money withdrawal.
+                  </p>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-[12px] pointer-events-none">
+                    UGX
+                  </span>
+                  <input
+                    type="number"
+                    step="1000"
+                    min="1000"
+                    value={editMinWithdraw}
+                    onChange={(e) => setEditMinWithdraw(Math.max(1000, Number(e.target.value)))}
+                    className="w-40 pl-12 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-right font-mono font-extrabold text-[15px] text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] text-slate-400 font-medium">Quick Presets:</span>
+                {[5000, 10000, 20000, 50000, 100000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setEditMinWithdraw(amt)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer ${
+                      editMinWithdraw === amt
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    UGX {amt.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Setting 3: Withdrawal Fee Rate & Welcome Bonus in 2 columns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Withdrawal Fee Rate */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <label className="text-[13px] font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <ArrowUpRight className="w-4 h-4 text-amber-600" />
+                      Withdrawal Processing Fee (%)
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Fee automatically withheld from payout for mobile network charges.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={editWithdrawFeeRate}
+                      onChange={(e) => setEditWithdrawFeeRate(Math.max(0, Math.min(50, Number(e.target.value))))}
+                      className="w-20 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-right font-mono font-extrabold text-[14px] text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                    />
+                    <span className="absolute right-2 top-2 text-slate-400 font-bold text-[12px] pointer-events-none">
+                      %
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-medium">Presets:</span>
+                  {[0, 5, 10, 15, 20].map((fee) => (
+                    <button
+                      key={fee}
+                      type="button"
+                      onClick={() => setEditWithdrawFeeRate(fee)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        editWithdrawFeeRate === fee
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {fee}%
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-white p-2.5 rounded-xl border border-amber-100 text-[11px] text-slate-600">
+                  <span>
+                    Example: UGX 100,000 withdraw &rarr; Fee: <strong className="text-amber-700 font-mono">UGX {Math.round(100000 * (editWithdrawFeeRate / 100)).toLocaleString()}</strong> (Net payout: <strong className="text-emerald-700 font-mono">UGX {Math.round(100000 * (1 - editWithdrawFeeRate / 100)).toLocaleString()}</strong>)
+                  </span>
+                </div>
+              </div>
+
+              {/* Welcome Bonus */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <label className="text-[13px] font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-600" />
+                      Starter Welcome Bonus (UGX)
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Bonus awarded immediately into newly registered user wallets.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-2 text-slate-400 font-bold text-[11px] pointer-events-none">
+                      UGX
+                    </span>
+                    <input
+                      type="number"
+                      step="500"
+                      min="0"
+                      value={editWelcomeBonus}
+                      onChange={(e) => setEditWelcomeBonus(Math.max(0, Number(e.target.value)))}
+                      className="w-28 pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-right font-mono font-extrabold text-[14px] text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-medium">Presets:</span>
+                  {[0, 2000, 4000, 5000, 10000].map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setEditWelcomeBonus(b)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer ${
+                        editWelcomeBonus === b
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {b === 0 ? '0' : `${Math.round(b / 1000)}k`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-white p-2.5 rounded-xl border border-blue-100 text-[11px] text-slate-600">
+                  <span>
+                    New users receive this instant balance to begin exploring available investment catalog items.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditReferralPct(currentSettings.referralPercentage);
+                  setEditMinWithdraw(currentSettings.minWithdrawUGX);
+                  setEditWithdrawFeeRate(Math.round(currentSettings.withdrawalFeeRate * 100));
+                  setEditWelcomeBonus(currentSettings.welcomeBonusUGX);
+                  setEditDailyRewardRate(Math.round(currentSettings.dailyRewardRate * 100));
+                  setSettingsFeedback({ type: 'success', message: 'Values reset to current saved configuration.' });
+                }}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
+              >
+                Reset to Current
+              </button>
+
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="px-6 py-2.5 bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {savingSettings ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Saving to Supabase...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Save & Deploy System Settings
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
 
       {/* 1. EDIT USER MODAL */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[13px]">
                   <Edit2 className="w-4 h-4" />
                 </div>
-                <h3 className="text-[16px] font-extrabold text-slate-900">
-                  Edit User Profile
-                </h3>
+                <div>
+                  <h3 className="text-[16px] font-extrabold text-slate-900">
+                    Edit User Profile & Permissions
+                  </h3>
+                  <p className="text-[11px] text-slate-400">Target UID: {editingUser.id}</p>
+                </div>
               </div>
               <button
                 onClick={() => setEditingUser(null)}
@@ -2396,45 +2870,122 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             )}
 
             <form onSubmit={handleSaveEditUser} className="space-y-3.5">
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={editFullName}
-                  onChange={(e) => setEditFullName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="investor@example.com"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+256 700 000 000"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+256 700 000 000"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Account Role
+                  </label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as any)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="investor">Investor (Standard User)</option>
+                    <option value="admin">Administrator (Full Access)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Account Status
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="active">Active (Normal Access)</option>
+                    <option value="blocked">Suspended / Blocked</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Investor Tier
+                  </label>
+                  <select
+                    value={editTier}
+                    onChange={(e) => setEditTier(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="VIP 1 Standard">VIP 1 Standard</option>
+                    <option value="VIP 2 Elite">VIP 2 Elite</option>
+                    <option value="VIP 3 Enterprise">VIP 3 Enterprise</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Referral Code
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BODA777"
+                    value={editReferralCode}
+                    onChange={(e) => setEditReferralCode(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
@@ -2447,13 +2998,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   disabled={editUserLoading}
                   className="flex-1 py-2.5 bg-[#1657D9] hover:bg-blue-700 text-white font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
                 >
-                  {editUserLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Save Changes'}
+                  {editUserLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Save User Profile'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* 2. ADJUST BALANCE MODAL */}
       {adjustingUser && (
@@ -2867,6 +3419,90 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       })
                     }
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Cycle Period (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 60"
+                    value={editingProject.cyclePeriodDays || ''}
+                    onChange={(e) => {
+                      const days = Number(e.target.value);
+                      const daily = editingProject.dailyRewardUGX || 0;
+                      setEditingProject({
+                        ...editingProject,
+                        cyclePeriodDays: days,
+                        cyclePeriod: days ? `${days} days` : '',
+                        projectedReturnUGX: days && daily ? days * daily : editingProject.projectedReturnUGX,
+                      });
+                    }}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Cycle Period Label
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 60 days"
+                    value={editingProject.cyclePeriod || ''}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        cyclePeriod: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Vehicle Type
+                  </label>
+                  <select
+                    value={editingProject.vehicleType || 'bike'}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        vehicleType: e.target.value as any,
+                      })
+                    }
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="bike">Delivery Bike / Boda</option>
+                    <option value="van">Commercial Passenger / Cargo Van</option>
+                    <option value="truck">Heavy Commercial Freight Truck</option>
+                    <option value="fleet">Multi-Unit Logistics Fleet Package</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Projected Total Return (UGX)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 210000"
+                    value={editingProject.projectedReturnUGX || ''}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        projectedReturnUGX: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>

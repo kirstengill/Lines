@@ -14,6 +14,7 @@ import {
   AdminUserSummary,
   BalanceAdjustment,
   UserAccountData,
+  SystemSettings,
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -246,7 +247,17 @@ class ApiClient {
 
   public async updateAdminUser(
     userId: string,
-    data: { username?: string; fullName?: string; phone?: string }
+    data: {
+      username?: string;
+      fullName?: string;
+      phone?: string;
+      email?: string;
+      role?: 'user' | 'admin';
+      isAdmin?: boolean;
+      status?: 'active' | 'blocked';
+      tier?: string;
+      referralCode?: string;
+    }
   ) {
     return this.request<{ success: boolean; user: UserProfile }>(`/api/admin/users/${userId}`, {
       method: 'PUT',
@@ -328,6 +339,30 @@ class ApiClient {
   public async rejectAdminTask(taskId: string) {
     return this.request(`/api/admin/tasks/${taskId}/reject`, { method: 'POST' });
   }
+
+  // ==================== SYSTEM SETTINGS ====================
+
+  public async fetchSystemSettings(): Promise<{ success: boolean; settings?: SystemSettings; error?: string }> {
+    const res = await this.request<{ success: boolean; settings: SystemSettings }>('/api/settings', { method: 'GET' });
+    return {
+      success: !res.error,
+      settings: res.settings || res.data?.settings,
+      error: res.error,
+    };
+  }
+
+  public async updateSystemSettings(settings: Partial<SystemSettings>): Promise<{ success: boolean; settings?: SystemSettings; error?: string }> {
+    const res = await this.request<{ success: boolean; settings: SystemSettings }>('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+    return {
+      success: !res.error && (res.success ?? true),
+      settings: res.settings || res.data?.settings,
+      error: res.error,
+    };
+  }
+
 }
 
 export const apiClient = new ApiClient();

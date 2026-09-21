@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { AVAILABLE_CATALOG } from '../data/initialData';
 import { apiClient } from './apiClient';
+import { systemSettingsService } from './systemSettings';
 
 export interface SubmitTransactionInput {
   type: 'deposit' | 'withdraw';
@@ -434,13 +435,18 @@ export const supabaseAdmin = {
       }
 
       const mappedMachines: Machine[] = data.map((m: any) => {
+        const defaultMatch = AVAILABLE_CATALOG.find((c) => c.id === m.id);
         let resolvedImage = m.image;
         if (!resolvedImage || (!resolvedImage.startsWith('http://') && !resolvedImage.startsWith('https://') && !resolvedImage.startsWith('data:'))) {
-          const defaultMatch = AVAILABLE_CATALOG.find((c) => c.id === m.id);
           if (defaultMatch && defaultMatch.image) {
             resolvedImage = defaultMatch.image;
           }
         }
+
+        const cycleDays = m.cycle_period_days !== undefined && m.cycle_period_days !== null
+          ? Number(m.cycle_period_days)
+          : (m.cyclePeriodDays !== undefined ? Number(m.cyclePeriodDays) : (defaultMatch?.cyclePeriodDays || 30));
+        const dailyRew = Number(m.daily_reward_ugx || m.dailyRewardUGX || 0);
 
         return {
           id: m.id,
@@ -448,10 +454,16 @@ export const supabaseAdmin = {
           subtitle: m.subtitle || undefined,
           category: m.category || 'Urban Delivery',
           image: resolvedImage || m.image || '',
-          dailyRewardUGX: Number(m.daily_reward_ugx || m.dailyRewardUGX || 0),
+          dailyRewardUGX: dailyRew,
           status: (m.status || 'Active') as Machine['status'],
           estYearlyROI: Number(m.est_yearly_roi || m.estYearlyROI || 0),
           minInvestUGX: Number(m.min_invest_ugx || m.minInvestUGX || 0),
+          cyclePeriodDays: cycleDays,
+          cyclePeriod: m.cycle_period || m.cyclePeriod || defaultMatch?.cyclePeriod || `${cycleDays} days`,
+          projectedReturnUGX: m.projected_return_ugx
+            ? Number(m.projected_return_ugx)
+            : (m.projectedReturnUGX ? Number(m.projectedReturnUGX) : (defaultMatch?.projectedReturnUGX || (dailyRew * cycleDays))),
+          vehicleType: m.vehicle_type || m.vehicleType || defaultMatch?.vehicleType || 'bike',
           hashrate: m.hashrate || 'Fleet Asset Spec',
           powerSource: m.power_source || m.powerSource || 'Transport & Logistics',
           uptime: m.uptime || '99.9%',
@@ -515,16 +527,25 @@ export const supabaseAdmin = {
       return { success: false, error: 'Project Title and Minimum Investment amount are required.' };
     }
 
+    const cycleDays = Number(machine.cyclePeriodDays || 30);
+    const dailyReward = Number(machine.dailyRewardUGX || 250000);
+    const cycleLabel = machine.cyclePeriod ? machine.cyclePeriod.trim() : `${cycleDays} days`;
+    const projReturn = Number(machine.projectedReturnUGX || (dailyReward * cycleDays));
+
     const payload = {
       id: machineId,
       title: machine.title.trim(),
       subtitle: machine.subtitle ? machine.subtitle.trim() : null,
       category: machine.category || 'DS-Mining',
       image: machine.image || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-      daily_reward_ugx: Number(machine.dailyRewardUGX || 250000),
+      daily_reward_ugx: dailyReward,
       status: machine.status || 'Active',
       est_yearly_roi: Number(machine.estYearlyROI || 120),
       min_invest_ugx: cost,
+      cycle_period_days: cycleDays,
+      cycle_period: cycleLabel,
+      projected_return_ugx: projReturn,
+      vehicle_type: machine.vehicleType || 'bike',
       hashrate: machine.hashrate || '50.0 TH/s',
       power_source: machine.powerSource || 'Clean Energy Array',
       uptime: machine.uptime || '99.9%',
@@ -549,6 +570,10 @@ export const supabaseAdmin = {
         status: payload.status as any,
         estYearlyROI: payload.est_yearly_roi,
         minInvestUGX: payload.min_invest_ugx,
+        cyclePeriodDays: payload.cycle_period_days,
+        cyclePeriod: payload.cycle_period,
+        projectedReturnUGX: payload.projected_return_ugx,
+        vehicleType: payload.vehicle_type as any,
         hashrate: payload.hashrate,
         powerSource: payload.power_source,
         uptime: payload.uptime,
@@ -581,6 +606,10 @@ export const supabaseAdmin = {
     if (machine.status !== undefined) updatePayload.status = machine.status;
     if (machine.estYearlyROI !== undefined) updatePayload.est_yearly_roi = Number(machine.estYearlyROI);
     if (machine.minInvestUGX !== undefined) updatePayload.min_invest_ugx = Math.round(Number(machine.minInvestUGX));
+    if (machine.cyclePeriodDays !== undefined) updatePayload.cycle_period_days = Number(machine.cyclePeriodDays);
+    if (machine.cyclePeriod !== undefined) updatePayload.cycle_period = machine.cyclePeriod.trim();
+    if (machine.projectedReturnUGX !== undefined) updatePayload.projected_return_ugx = Number(machine.projectedReturnUGX);
+    if (machine.vehicleType !== undefined) updatePayload.vehicle_type = machine.vehicleType;
     if (machine.hashrate !== undefined) updatePayload.hashrate = machine.hashrate;
     if (machine.powerSource !== undefined) updatePayload.power_source = machine.powerSource;
     if (machine.uptime !== undefined) updatePayload.uptime = machine.uptime;
@@ -608,6 +637,10 @@ export const supabaseAdmin = {
         status: data.status,
         estYearlyROI: Number(data.est_yearly_roi),
         minInvestUGX: Number(data.min_invest_ugx),
+        cyclePeriodDays: data.cycle_period_days !== undefined && data.cycle_period_days !== null ? Number(data.cycle_period_days) : machine.cyclePeriodDays,
+        cyclePeriod: data.cycle_period || machine.cyclePeriod,
+        projectedReturnUGX: data.projected_return_ugx !== undefined && data.projected_return_ugx !== null ? Number(data.projected_return_ugx) : machine.projectedReturnUGX,
+        vehicleType: data.vehicle_type || machine.vehicleType,
         hashrate: data.hashrate,
         powerSource: data.power_source,
         uptime: data.uptime,
@@ -810,7 +843,8 @@ export const supabaseAdmin = {
               .maybeSingle();
 
             if (referrer) {
-              const commissionUGX = Math.round(amount * 0.20);
+              const refPercentage = systemSettingsService.getReferralPercentage();
+              const commissionUGX = Math.round(amount * (refPercentage / 100));
               if (commissionUGX > 0) {
                 // Update referrer stats
                 const curEarnings = Number(referrer.referral_earnings_ugx || 0);
@@ -823,8 +857,8 @@ export const supabaseAdmin = {
                 await sb.from('notifications').insert({
                   id: `notif_refavail_${txId}`,
                   user_id: referrer.id,
-                  title: 'Referral Commission Available (20%)',
-                  message: `Your referral @${profile.username || 'partner'} had a deposit of UGX ${amount.toLocaleString()} approved. UGX ${commissionUGX.toLocaleString()} (20% commission) is now available to claim in your Referral tab!`,
+                  title: `Referral Commission Available (${refPercentage}%)`,
+                  message: `Your referral @${profile.username || 'partner'} had a deposit of UGX ${amount.toLocaleString()} approved. UGX ${commissionUGX.toLocaleString()} (${refPercentage}% commission) is now available to claim in your Referral tab!`,
                   read: false,
                   type: 'success',
                   created_at: new Date().toISOString(),
@@ -977,7 +1011,17 @@ export const supabaseAdmin = {
 
   async updateAdminUser(
     userId: string,
-    data: { username?: string; fullName?: string; phone?: string; status?: 'active' | 'blocked' }
+    data: {
+      username?: string;
+      fullName?: string;
+      phone?: string;
+      email?: string;
+      role?: 'user' | 'admin';
+      isAdmin?: boolean;
+      status?: 'active' | 'blocked';
+      tier?: string;
+      referralCode?: string;
+    }
   ): Promise<{ success: boolean; error?: string }> {
     const sb = getSupabaseClient();
     if (!sb) {
@@ -985,15 +1029,59 @@ export const supabaseAdmin = {
       return { success: !res.error, error: res.error };
     }
 
-    const { error } = await sb.rpc('admin_update_user', {
-      p_user_id: userId,
-      p_username: data.username ?? null,
-      p_full_name: data.fullName ?? null,
-      p_phone: data.phone ?? null,
-      p_status: data.status ?? null,
-      p_full_name_meta: data.fullName ?? null,
-    });
-    if (error) return { success: false, error: translate(error.message) };
+    // Try RPC first
+    let rpcSucceeded = false;
+    try {
+      const { error: rpcErr } = await sb.rpc('admin_update_user', {
+        p_user_id: userId,
+        p_username: data.username ?? null,
+        p_full_name: data.fullName ?? null,
+        p_phone: data.phone ?? null,
+        p_status: data.status ?? null,
+        p_full_name_meta: data.fullName ?? null,
+      });
+      if (!rpcErr) rpcSucceeded = true;
+    } catch {
+      // Continue to direct table update fallback
+    }
+
+    // Direct update on profiles table to ensure all fields (email, tier, role, is_admin, referral_code) are persisted
+    try {
+      const profileUpdate: any = { updated_at: new Date().toISOString() };
+      if (data.username !== undefined) profileUpdate.username = data.username.trim();
+      if (data.fullName !== undefined) profileUpdate.full_name = data.fullName.trim();
+      if (data.phone !== undefined) profileUpdate.phone = data.phone.trim();
+      if (data.email !== undefined) profileUpdate.email = data.email.trim();
+      if (data.status !== undefined) profileUpdate.status = data.status;
+      if (data.tier !== undefined) profileUpdate.tier = data.tier;
+      if (data.referralCode !== undefined) profileUpdate.referral_code = data.referralCode.trim();
+      if (data.isAdmin !== undefined) {
+        profileUpdate.is_admin = data.isAdmin;
+        profileUpdate.role = data.isAdmin ? 'admin' : 'user';
+      } else if (data.role !== undefined) {
+        profileUpdate.role = data.role;
+        profileUpdate.is_admin = data.role === 'admin';
+      }
+
+      const { error: profileErr } = await sb
+        .from('profiles')
+        .update(profileUpdate)
+        .eq('id', userId);
+
+      if (profileErr && !rpcSucceeded) {
+        return { success: false, error: translate(profileErr.message) };
+      }
+    } catch (e: any) {
+      if (!rpcSucceeded) return { success: false, error: e?.message || 'Failed to update user profile' };
+    }
+
+    // Also sync to mock server / local cache if running
+    try {
+      await apiClient.updateAdminUser(userId, data);
+    } catch {
+      // Non-critical
+    }
+
     return { success: true };
   },
 

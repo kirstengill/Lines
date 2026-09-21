@@ -433,8 +433,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#EEF2F8] text-[#0F172A] flex flex-col items-center selection:bg-blue-600 selection:text-white">
-      <div className="w-full max-w-2xl min-h-screen flex flex-col bg-[#F4F7FC] shadow-sm sm:border-x sm:border-slate-200/80 relative">
+    <div className="min-h-screen bg-[#07090D] text-slate-100 flex flex-col items-center selection:bg-amber-500 selection:text-slate-950">
+      <div className="w-full max-w-2xl min-h-screen flex flex-col bg-[#0B0E14] shadow-2xl sm:border-x sm:border-amber-500/20 relative">
         {/* Lightweight Page-to-Page Loading Animation Bar */}
         <PageTransitionLoader
           isLoading={isPageLoading}

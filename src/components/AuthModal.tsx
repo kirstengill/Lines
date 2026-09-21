@@ -131,33 +131,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 flex flex-col animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-[#131722] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-amber-500/25 flex flex-col animate-in zoom-in-95 duration-200 text-slate-100">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">
+        <div className="p-5 border-b border-amber-500/20 flex items-center justify-between bg-[#0D1017]">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-[17px] font-extrabold text-[#0F172A] leading-tight">
+              <h3 className="text-[17px] font-extrabold text-amber-200 leading-tight">
                 Account Access
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-amber-200/60">
                 FleetVest · Transport & Logistics Investment
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab switch */}
-        <div className="grid grid-cols-2 border-b border-slate-100 bg-slate-50/70 p-1 m-4 rounded-xl gap-1">
+        <div className="grid grid-cols-2 border border-amber-500/20 bg-[#0D1017] p-1 m-4 rounded-xl gap-1">
           <button
             onClick={() => {
               setTab('signin');
@@ -165,8 +165,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             }}
             className={`py-2 text-[12px] font-bold rounded-lg transition-all cursor-pointer ${
               tab === 'signin'
-                ? 'bg-white text-[#0066FF] shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                : 'text-slate-400 hover:text-amber-200'
             }`}
           >
             Sign In
@@ -178,8 +178,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             }}
             className={`py-2 text-[12px] font-bold rounded-lg transition-all cursor-pointer ${
               tab === 'signup'
-                ? 'bg-white text-[#0066FF] shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                : 'text-slate-400 hover:text-amber-200'
             }`}
           >
             Sign Up (UGX 4,000 Bonus)
@@ -189,12 +189,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
         {/* Form */}
         <div className="px-5 pb-5">
           {errorMsg && (
-            <div className="mb-3 p-2.5 bg-red-50 text-red-700 text-xs rounded-xl font-medium border border-red-200">
+            <div className="mb-3 p-2.5 bg-red-950/40 text-red-300 text-xs rounded-xl font-medium border border-red-500/40">
               {errorMsg}
             </div>
           )}
           {successMsg && (
-            <div className="mb-3 p-2.5 bg-emerald-50 text-emerald-700 text-xs rounded-xl font-medium border border-emerald-200 flex items-center gap-1.5">
+            <div className="mb-3 p-2.5 bg-emerald-950/40 text-emerald-300 text-xs rounded-xl font-medium border border-emerald-500/40 flex items-center gap-1.5">
               <Check className="w-4 h-4" /> {successMsg}
             </div>
           )}
@@ -202,25 +202,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
           <form onSubmit={handleSubmit} className="space-y-3">
             {tab === 'signup' && (
               <>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span className="text-[11px] font-bold text-amber-950">
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-[11px] font-bold text-amber-200">
                     UGX 4,000 Welcome Bonus is reserved and unlocks with 0% fee upon your first approved deposit.
                   </span>
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-slate-700 mb-1 block">
+                  <label className="text-[12px] font-semibold text-amber-200/80 mb-1 block">
                     Full Legal Name
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Sarah Namubiru"
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                      className="w-full pl-9 pr-3 py-2 bg-[#0D1017] border border-amber-500/25 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                     />
                   </div>
                 </div>
@@ -228,53 +228,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             )}
 
             <div>
-              <label className="text-[12px] font-semibold text-slate-700 mb-1 block">
+              <label className="text-[12px] font-semibold text-amber-200/80 mb-1 block">
                 Username
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter your username"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full pl-9 pr-3 py-2 bg-[#0D1017] border border-amber-500/25 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[12px] font-semibold text-slate-700 mb-1 block">
+              <label className="text-[12px] font-semibold text-amber-200/80 mb-1 block">
                 Password
               </label>
               <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={tab === 'signup' ? 'Minimum 6 characters' : '••••••••••••'}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full pl-9 pr-3 py-2 bg-[#0D1017] border border-amber-500/25 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
             </div>
 
             {tab === 'signup' && (
               <div>
-                <label className="text-[12px] font-semibold text-slate-700 mb-1 block">
+                <label className="text-[12px] font-semibold text-amber-200/80 mb-1 block">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Re-type your password"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    className="w-full pl-9 pr-3 py-2 bg-[#0D1017] border border-amber-500/25 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -283,11 +283,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             {tab === 'signup' && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[12px] font-semibold text-slate-700 flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-blue-600" /> Referral Code (Optional)
+                  <label className="text-[12px] font-semibold text-amber-200/80 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-amber-400" /> Referral Code (Optional)
                   </label>
                   {referralCode && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-0.5">
                       <ShieldCheck className="w-3 h-3" /> Inviter Linked
                     </span>
                   )}
@@ -297,7 +297,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                   value={referralCode}
                   onChange={(e) => setReferralCode(cleanReferralCode(e.target.value) || e.target.value.toUpperCase())}
                   placeholder="e.g. FV-8F3K9P"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full px-3 py-2 bg-[#0D1017] border border-amber-500/25 rounded-xl text-sm font-mono uppercase text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>
             )}
@@ -305,7 +305,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 mt-2 bg-[#0066FF] hover:bg-blue-600 active:scale-98 text-white font-bold text-[14px] rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="w-full py-2.5 mt-2 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-[14px] rounded-xl transition-all shadow-md shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
             >
               {loading
                 ? 'Processing...'
