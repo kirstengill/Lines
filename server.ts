@@ -1,3 +1,4 @@
+﻿import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -26,7 +27,6 @@ if (supabaseUrl && supabaseKey) {
 export interface ServerUserRecord {
   id: string;
   username: string;
-  passwordHash: string;
   fullName: string;
   email?: string;
   phone?: string;
@@ -103,151 +103,12 @@ interface ServerUserStore {
   };
 }
 
-// Initial Database Stores with default test users
-const defaultAdminId = '95bf6171-7258-49e6-b5aa-477c4266b9a4';
-const defaultUserId = 'usr_demo_solnova';
-
-const serverDatabase: ServerUserStore = {
-  [defaultAdminId]: {
-    user: {
-      id: defaultAdminId,
-      username: 'coolman',
-      passwordHash: 'TestPass123!',
-      fullName: 'Cool Man (Platform Admin)',
-      phone: '+256700000000',
-      status: 'active',
-      role: 'admin',
-      isAdmin: true,
-      tier: 'VIP 2 Elite',
-      referralCode: 'SC-ADMIN01',
-      referralCount: 3,
-      referralEarningsUGX: 120000,
-      referrals: [],
-      welcomeBonusClaimed: true,
-      memberSince: 'August 2026',
-      createdAt: new Date().toISOString(),
-    },
-    data: {
-      wallet: {
-        totalBalanceUGX: 25000000,
-        dailyPnlUGX: 250000,
-        activeMachinesCount: 2,
-        pendingTasksCount: 1,
-      },
-      transactions: [
-        {
-          id: 'tx_init_1',
-          userId: defaultAdminId,
-          username: 'coolman',
-          type: 'deposit',
-          amountUGX: 25000000,
-          currency: 'UGX',
-          status: 'completed',
-          date: new Date().toLocaleString(),
-          timestamp: Date.now(),
-          created_at: new Date().toISOString(),
-          description: 'Initial Capital Injection',
-          paymentMethod: 'Bank Transfer',
-        },
-      ],
-      machines: [],
-      adminTasks: [
-        {
-          id: 'task_init_1',
-          userId: defaultUserId,
-          title: 'Deposit Verification: UGX 50,000',
-          description: 'User demouser requested deposit of UGX 50,000 via MTN Mobile Money',
-          priority: 'high',
-          category: 'Deposit Verification',
-          type: 'deposit',
-          status: 'pending',
-          amountUGX: 50000,
-          date: new Date().toLocaleString(),
-          timestamp: Date.now(),
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      notifications: [
-        {
-          id: 'notif_init_1',
-          userId: defaultAdminId,
-          title: 'Welcome to SolNova Capital Admin',
-          message: 'You have administrator privileges to review transactions, manage catalog nodes, and adjust balances.',
-          type: 'system',
-          read: false,
-          date: 'Just now',
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    },
-  },
-  [defaultUserId]: {
-    user: {
-      id: defaultUserId,
-      username: 'demouser',
-      passwordHash: 'TestPass123!',
-      fullName: 'Demo Investor',
-      phone: '+256711111111',
-      status: 'active',
-      role: 'user',
-      isAdmin: false,
-      tier: 'Standard',
-      referralCode: 'SC-DEMO01',
-      referralCount: 1,
-      referralEarningsUGX: 15000,
-      referrals: [],
-      welcomeBonusClaimed: true,
-      memberSince: 'August 2026',
-      createdAt: new Date().toISOString(),
-    },
-    data: {
-      wallet: {
-        totalBalanceUGX: 75000,
-        dailyPnlUGX: 3500,
-        activeMachinesCount: 1,
-        pendingTasksCount: 0,
-      },
-      transactions: [
-        {
-          id: 'tx_demo_bonus',
-          userId: defaultUserId,
-          username: 'demouser',
-          type: 'bonus',
-          amountUGX: 4000,
-          currency: 'UGX',
-          status: 'completed',
-          date: new Date().toLocaleString(),
-          timestamp: Date.now(),
-          created_at: new Date().toISOString(),
-          description: 'Welcome Bonus Credit',
-          paymentMethod: 'System',
-        },
-      ],
-      machines: [],
-      adminTasks: [],
-      notifications: [
-        {
-          id: 'notif_demo_1',
-          userId: defaultUserId,
-          title: 'Welcome Bonus Claimed!',
-          message: 'UGX 4,000 starter bonus has been credited to your account.',
-          type: 'success',
-          read: false,
-          date: 'Just now',
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    },
-  },
-};
-
-const activeTokens: { [token: string]: string } = {
-  'tok_admin_coolman': defaultAdminId,
-  'tok_user_demouser': defaultUserId,
-};
+// In-memory fallback store (no seeded users, no passwords).
+// Fleetvest authentication and ledger live in Supabase.
+const serverDatabase: ServerUserStore = {};
+const activeTokens: { [token: string]: string } = {};
 const balanceAdjustments: BalanceAdjustmentRecord[] = [];
 
-// Seed Default FleetVest Investment Products Catalog
 let catalogDatabase: CatalogMachine[] = [
   {
     id: 'fleet_delivery_bike',
@@ -390,7 +251,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   const userIdHeader = req.headers['x-user-id'] as string;
-  if (userIdHeader && serverDatabase[userIdHeader]) {
+  if (userIdHeader && serverDatabase[userIdHeader] && token && activeTokens[token] === userIdHeader) {
     (req as any).userId = userIdHeader;
     (req as any).userRecord = serverDatabase[userIdHeader].user;
     return next();
@@ -409,7 +270,6 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
             user: {
               id: u.id,
               username: meta.username || u.email?.split('@')[0] || 'user',
-              passwordHash: '',
               fullName: meta.full_name || meta.username || 'User',
               phone: meta.phone || '',
               status: meta.status || 'active',
@@ -474,16 +334,29 @@ app.post('/api/auth/signin', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  // 1. Try remote Supabase Auth if available
-  if (supabaseAdmin) {
-    try {
-      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`;
-      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
-        email: internalEmail,
-        password,
-      });
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Authentication is not configured. Set SUPABASE_URL and a service or anon key.' });
+  }
 
-      if (!error && data.user) {
+  const authEmailDomain = process.env.AUTH_EMAIL_DOMAIN || process.env.VITE_AUTH_EMAIL_DOMAIN || 'sunrise-ds.com';
+  const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@${authEmailDomain}`;
+  const altEmails = [
+    internalEmail,
+    `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`,
+    `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@users.fleetvest.app`,
+  ];
+
+  try {
+    let data: any = null;
+    let error: any = null;
+    for (const email of Array.from(new Set(altEmails))) {
+      const attempt = await supabaseAdmin.auth.signInWithPassword({ email, password });
+      data = attempt.data;
+      error = attempt.error;
+      if (!error && data?.user) break;
+    }
+
+    if (!error && data.user) {
         const metadata = data.user.user_metadata || {};
         const isAdmin = metadata.role === 'admin' || metadata.is_admin === true;
         const role = isAdmin ? 'admin' : 'user';
@@ -1718,7 +1591,7 @@ app.post('/api/user/investments/buy', requireAuth, (req: Request, res: Response)
     hashrate: hashrate || '50.0 TH/s',
     powerSource: powerSource || 'Hybrid Kinetic / Solar Array',
     uptime: '100.00%',
-    temperature: '38.0°C',
+    temperature: '38.0Â°C',
     efficiency: 99.4,
     totalMinedUGX: 0,
     unclaimedRewardsUGX: 0,

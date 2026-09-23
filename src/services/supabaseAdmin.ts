@@ -109,7 +109,8 @@ export const supabaseAdmin = {
 
       // Check balance and minimum for withdrawals
       if (input.type === 'withdraw') {
-        const MIN_WITHDRAWAL_UGX = 10000;
+        await systemSettingsService.fetchSettings();
+        const MIN_WITHDRAWAL_UGX = systemSettingsService.getMinWithdrawUGX();
         if (numericAmount < MIN_WITHDRAWAL_UGX) {
           return {
             success: false,
@@ -302,7 +303,13 @@ export const supabaseAdmin = {
       const { data, error } = await sb.rpc('claim_reward', { p_user_machine_id: userMachineId });
       if (error) return { success: false, error: translate(error.message) };
       if (!data?.success) {
-        return { success: false, error: 'No accumulated yield available to claim at this time.' };
+        const reason = data?.reason;
+        const msg =
+          data?.message ||
+          (reason === 'locked'
+            ? 'Returns are locked until the investment lock period elapses.'
+            : 'No accumulated yield available to claim at this time.');
+        return { success: false, error: msg, reason };
       }
       return {
         success: true,

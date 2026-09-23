@@ -31,6 +31,12 @@ export interface Machine {
   totalMinedUGX?: number;
   unclaimedRewardsUGX?: number;
   isBoosted?: boolean;
+  lockDays?: number;
+  lockUntil?: string;
+  investedAt?: string;
+  accruedRewardsUGX?: number;
+  lastClaimedAt?: string;
+  returnStatus?: 'accruing' | 'locked' | 'claimable' | 'claimed';
 }
 
 export interface UserInvestment {
@@ -95,7 +101,7 @@ export interface ReferralPartner {
   status: 'active' | 'pending';
   /** Total approved deposits from this referred user in UGX */
   approvedDepositUGX?: number;
-  /** Commission (20%) generated from this referred user's approved deposits */
+  /** Commission generated from this referred user's approved deposits */
   commissionUGX?: number;
   /** Status of commission or deposit ('approved' | 'no_approved_deposit' | string) */
   commissionStatus?: string;
@@ -215,6 +221,7 @@ export interface SystemSettings {
   withdrawalFeeRate?: number;
   welcomeBonusUGX?: number;
   dailyRewardRate?: number;
+  investmentLockDays: number;
   updatedAt?: string;
   updatedBy?: string;
 }

@@ -22,6 +22,7 @@ import { supabaseAdmin } from './supabaseAdmin';
 import { getSupabaseClient } from './supabase';
 import { apiClient } from './apiClient';
 import { systemSettingsService } from './systemSettings';
+import { mapUserMachineRow } from './investmentStatus';
 
 export interface UserAccountData {
   wallet: WalletState;
@@ -157,7 +158,8 @@ class AuthService {
     const clean = this.normalizeUsername(identifier);
     if (!clean) return '';
     if (clean.includes('@')) return clean;
-    return `${clean}@sunrise-ds.com`;
+    const domain = (import.meta.env.VITE_AUTH_EMAIL_DOMAIN as string) || 'sunrise-ds.com';
+    return `${clean}@${domain}`;
   }
 
   /**
@@ -202,8 +204,8 @@ class AuthService {
 
     // Fallback: check local storage token for standalone / offline Express server mode
     try {
-      const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('solnova_session_token') : null;
-      const storedUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('solnova_session_user_id') : null;
+      const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('fleetvest_session_token') : null;
+      const storedUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('fleetvest_session_user_id') : null;
       if (storedToken && storedUserId) {
         apiClient.setSession(storedToken, storedUserId);
         const meRes = await apiClient.getSessionUser();
@@ -239,13 +241,26 @@ class AuthService {
     // 1. Try Supabase Auth if client is configured
     if (this.client) {
       try {
-        const email = this.formatEmail(cleanInput);
-        const { data: authData, error: authError } = await this.client.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const emailCandidates = Array.from(
+          new Set([
+            this.formatEmail(cleanInput),
+            `${this.normalizeUsername(cleanInput)}@sunrise-ds.com`,
+            `${this.normalizeUsername(cleanInput)}@users.fleetvest.app`,
+          ].filter(Boolean))
+        );
 
-        if (!authError && authData.user && authData.session) {
+        let authData: any = null;
+        let authError: any = null;
+        for (const email of emailCandidates) {
+          const attempt = await this.client.auth.signInWithPassword({ email, password });
+          authError = attempt.error;
+          authData = attempt.data;
+          if (!attempt.error && attempt.data?.user && attempt.data?.session) {
+            break;
+          }
+        }
+
+        if (!authError && authData?.user && authData?.session) {
           const profile = await this.fetchProfileFromSupabase(authData.user);
           if (!profile) {
             await this.client.auth.signOut();
@@ -286,8 +301,8 @@ class AuthService {
     this.setCurrentUser(serverRes.user, serverRes.token);
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem('solnova_session_token', serverRes.token);
-        localStorage.setItem('solnova_session_user_id', serverRes.user.id);
+        localStorage.setItem('fleetvest_session_token', serverRes.token);
+        localStorage.setItem('fleetvest_session_user_id', serverRes.user.id);
       } catch {}
     }
 
@@ -324,7 +339,7 @@ class AuthService {
     // 1. Try Supabase Auth if client is configured
     if (this.client) {
       try {
-        const email = `${cleanUsername}@sunrise-ds.com`;
+        const email = this.formatEmail(cleanUsername);
         const { data: authData, error: authError } = await this.client.auth.signUp({
           email,
           password,
@@ -397,8 +412,8 @@ class AuthService {
     this.setCurrentUser(serverRes.user, serverRes.token);
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem('solnova_session_token', serverRes.token);
-        localStorage.setItem('solnova_session_user_id', serverRes.user.id);
+        localStorage.setItem('fleetvest_session_token', serverRes.token);
+        localStorage.setItem('fleetvest_session_user_id', serverRes.user.id);
       } catch {}
     }
 
@@ -435,6 +450,8 @@ class AuthService {
     await apiClient.signOut();
     if (typeof localStorage !== 'undefined') {
       try {
+        localStorage.removeItem('fleetvest_session_token');
+        localStorage.removeItem('fleetvest_session_user_id');
         localStorage.removeItem('solnova_session_token');
         localStorage.removeItem('solnova_session_user_id');
       } catch {}
@@ -599,25 +616,7 @@ class AuthService {
             return timeB - timeA;
           });
 
-        const machines: Machine[] = (machinesRes.data || []).map((m: any) => ({
-          id: m.id || m.machine_id,
-          title: m.title,
-          subtitle: m.subtitle,
-          category: m.category || 'DS-Mining',
-          image: m.image,
-          dailyRewardUGX: Number(m.daily_reward_ugx),
-          status: m.status || 'Active',
-          estYearlyROI: Number(m.est_yearly_roi || 0),
-          minInvestUGX: Number(m.min_invest_ugx || 0),
-          hashrate: m.hashrate || '10.0 TH/s',
-          powerSource: m.power_source || 'Grid Power',
-          uptime: m.uptime || '99.9%',
-          temperature: m.temperature || '36.0°C',
-          efficiency: Number(m.efficiency || 98.5),
-          totalMinedUGX: Number(m.total_mined_ugx || 0),
-          unclaimedRewardsUGX: Number(m.unclaimed_rewards_ugx || 0),
-          isBoosted: Boolean(m.is_boosted),
-        }));
+        const machines: Machine[] = (machinesRes.data || []).map((m: any) => mapUserMachineRow(m));
 
         const notifications: AppNotification[] = (notifsRes.data || []).map((n: any) => ({
           id: n.id,
@@ -777,7 +776,7 @@ class AuthService {
             .eq('status', 'completed');
 
           const totalDeposits = (approvedTxs || []).reduce((sum, tx) => sum + (Number(tx.amount_ugx) || 0), 0);
-          const liveCommission = Math.round(totalDeposits * 0.20);
+          const liveCommission = Math.round(totalDeposits * (systemSettingsService.getReferralPercentage() / 100));
           if (liveCommission > totalCommissionUGX) {
             totalCommissionUGX = liveCommission;
           }
@@ -901,7 +900,7 @@ class AuthService {
 
       return profiles.map((p: any) => {
         const approvedDep = approvedDepositsByUserId[p.id] || 0;
-        const comm = Math.round(approvedDep * 0.20);
+        const comm = Math.round(approvedDep * (systemSettingsService.getReferralPercentage() / 100));
         return {
           id: p.id,
           username: p.username || 'user',
@@ -958,7 +957,7 @@ class AuthService {
       return { success: false, message: 'Unable to load profile. Please try again.' };
     }
 
-    if (myProfile.referred_by && myProfile.referred_by.trim() && myProfile.referred_by !== 'SC-SOLNOVA') {
+    if (myProfile.referred_by && myProfile.referred_by.trim()) {
       return {
         success: false,
         message: `Your account is already linked to inviter code ${myProfile.referred_by}.`,
@@ -1017,7 +1016,7 @@ class AuthService {
         .eq('status', 'completed');
 
       const totalDep = (myDeposits || []).reduce((sum, d) => sum + (Number(d.amount_ugx) || 0), 0);
-      const earnedComm = Math.round(totalDep * 0.20);
+      const earnedComm = Math.round(totalDep * (systemSettingsService.getReferralPercentage() / 100));
       const prevEarnings = Number(referrer.referral_earnings_ugx || 0);
 
       await sb
@@ -1143,7 +1142,7 @@ class AuthService {
         amount_ugx: available,
         currency: 'UGX',
         status: 'completed',
-        description: 'Claimed Referral Commission (20%)',
+        description: 'Claimed Referral Commission',
         is_credit: true,
         created_at: new Date().toISOString(),
       });
@@ -1507,26 +1506,40 @@ class AuthService {
   }
 
   public async toggleUserStatus(userId: string, status: 'active' | 'blocked') {
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { data, error } = await sb.rpc('admin_set_user_status', {
+        p_user_id: userId,
+        p_status: status,
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true, ...data };
+    }
     return supabaseAdmin.updateAdminUser(userId, { status });
   }
 
   public async deleteUser(userId: string) {
     const sb = getSupabaseClient();
     if (!sb) return { success: false, error: 'Database not configured' };
-    if (!this.isAdmin()) return { success: false, error: 'Admin access required' };
+    const { data, error } = await sb.rpc('admin_delete_user', { p_user_id: userId });
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: data?.username ? `User @${data.username} removed.` : 'User removed.' };
+  }
 
-    // Clean up user-owned rows first (FK references), then the auth user's profile.
-    try {
-      await sb.from('transactions').delete().eq('user_id', userId);
-      await sb.from('notifications').delete().eq('user_id', userId);
-      await sb.from('user_machines').delete().eq('user_id', userId);
-      await sb.from('balance_adjustments').delete().eq('user_id', userId);
-      await sb.from('wallets').delete().eq('user_id', userId);
-      await sb.from('profiles').delete().eq('id', userId);
-      return { success: true, message: 'User profile removed.' };
-    } catch (e: any) {
-      return { success: false, error: e?.message || 'Failed to delete user' };
-    }
+  public async fetchAdminUserLedger(userId: string) {
+    const sb = getSupabaseClient();
+    if (!sb) return { error: 'Database not configured' };
+    const { data, error } = await sb.rpc('admin_user_ledger', { p_user_id: userId });
+    if (error) return { error: error.message };
+    return { data };
+  }
+
+  public async getAdminAuditLogs() {
+    const sb = getSupabaseClient();
+    if (!sb) return { logs: [], error: 'Database not configured' };
+    const { data, error } = await sb.rpc('admin_list_audit_logs');
+    if (error) return { logs: [], error: error.message };
+    return { logs: data || [] };
   }
 
   public async getBalanceAuditLogs(): Promise<{ adjustments: BalanceAdjustment[]; error?: string }> {
