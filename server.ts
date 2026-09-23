@@ -5,7 +5,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const app = express();
+export const app = express();
 const PORT = 2828;
 
 app.use(express.json());
