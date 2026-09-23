@@ -5,7 +5,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-const URL = process.env.VITE_SUPABASE_URL || 'https://brtvyputtflgvbzbvamm.supabase.co';
+const URL = process.env.VITE_SUPABASE_URL ;
 const KEY = process.env.VITE_SUPABASE_ANON_KEY;
 if (!KEY) { console.error('Set VITE_SUPABASE_ANON_KEY'); process.exit(1); }
 
