@@ -6,7 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = 3000;
+const PORT = 2828;
 
 app.use(express.json());
 
@@ -416,7 +416,6 @@ app.post('/api/auth/signin', async (req: Request, res: Response) => {
     } catch (e) {
       // Fall through to server-side user lookup
     }
-  }
 
   // 2. Server database lookup
   let foundId: string | null = null;
