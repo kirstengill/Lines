@@ -1,14 +1,29 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const app = express();
 const PORT = 2828;
 
 app.use(express.json());
+
+// CORS middleware for all responses
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-User-Id');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Handle OPTIONS/preflight requests
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    return res.status(204).end();
+  }
+  
+  next();
+});
 
 // Server-side Supabase client (Lazy initialized with project credentials)
 let supabaseAdmin: SupabaseClient | null = null;
@@ -1782,6 +1797,8 @@ app.post('/api/admin/tasks/:id/reject', requireAuth, requireAdmin, (req: Request
 // ==========================================
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    // Dynamically import Vite only in development
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1796,10 +1813,10 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Sunrise Capital full-stack server running on http://0.0.0.0:${PORT}`);
+    console.log(`FleetVest full-stack server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-if(!process.env.vercel){
-  startServer()
-};
+if (!process.env.VERCEL) {
+  startServer();
+}
