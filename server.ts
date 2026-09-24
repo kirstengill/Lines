@@ -1,11 +1,11 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const app = express();
-const PORT = 2828;
+const PORT = 3203;
 
 app.use(express.json());
 
