@@ -1505,11 +1505,72 @@ app.get('/api/admin/audit/balance-adjustments', requireAuth, requireAdmin, (req:
 let systemSettingsDatabase = {
   referralPercentage: 20,
   minWithdrawUGX: 10000,
+  minDepositUGX: 15000,
   withdrawalFeeRate: 0.15,
   dailyRewardRate: 0.05,
   welcomeBonusUGX: 4000,
+  investmentLockDays: 60,
   updatedAt: new Date().toISOString(),
+  updatedBy: 'system',
 };
+
+// Load system settings from Supabase on startup
+async function loadSystemSettingsFromSupabase() {
+  if (!supabaseAdmin) return;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('system_settings')
+      .select('*')
+      .eq('id', 'global_config')
+      .maybeSingle();
+    
+    if (!error && data) {
+      systemSettingsDatabase = {
+        referralPercentage: Number(data.referral_percentage ?? data.referralPercentage ?? 20),
+        minWithdrawUGX: Number(data.min_withdraw_ugx ?? data.minWithdrawUGX ?? 10000),
+        minDepositUGX: Number(data.min_deposit_ugx ?? data.minDepositUGX ?? 15000),
+        withdrawalFeeRate: Number(data.withdrawal_fee_rate ?? data.withdrawalFeeRate ?? 0.15),
+        welcomeBonusUGX: Number(data.welcome_bonus_ugx ?? data.welcomeBonusUGX ?? 4000),
+        dailyRewardRate: Number(data.daily_reward_rate ?? data.dailyRewardRate ?? 0.05),
+        investmentLockDays: Number(data.investment_lock_days ?? data.investmentLockDays ?? 60),
+        updatedAt: data.updated_at ?? data.updatedAt ?? new Date().toISOString(),
+        updatedBy: data.updated_by ?? data.updatedBy ?? 'system',
+      };
+      console.log('System settings loaded from Supabase');
+    }
+  } catch (e) {
+    console.warn('Could not load system settings from Supabase:', e);
+  }
+}
+
+// Save system settings to Supabase
+async function saveSystemSettingsToSupabase() {
+  if (!supabaseAdmin) return;
+  try {
+    const { error } = await supabaseAdmin
+      .from('system_settings')
+      .upsert({
+        id: 'global_config',
+        referral_percentage: systemSettingsDatabase.referralPercentage,
+        min_withdraw_ugx: systemSettingsDatabase.minWithdrawUGX,
+        min_deposit_ugx: systemSettingsDatabase.minDepositUGX,
+        withdrawal_fee_rate: systemSettingsDatabase.withdrawalFeeRate,
+        welcome_bonus_ugx: systemSettingsDatabase.welcomeBonusUGX,
+        daily_reward_rate: systemSettingsDatabase.dailyRewardRate,
+        investment_lock_days: systemSettingsDatabase.investmentLockDays,
+        updated_at: systemSettingsDatabase.updatedAt,
+        updated_by: systemSettingsDatabase.updatedBy,
+      });
+    
+    if (error) {
+      console.error('Failed to save system settings to Supabase:', error);
+    } else {
+      console.log('System settings saved to Supabase');
+    }
+  } catch (e) {
+    console.error('Error saving system settings to Supabase:', e);
+  }
+}
 
 // Public: Get global system settings
 app.get('/api/settings', (req: Request, res: Response) => {
@@ -1517,13 +1578,19 @@ app.get('/api/settings', (req: Request, res: Response) => {
 });
 
 // Admin: Update global system settings
-app.put('/api/admin/settings', requireAuth, requireAdmin, (req: Request, res: Response) => {
-  const { referralPercentage, minWithdrawUGX, withdrawalFeeRate, dailyRewardRate, welcomeBonusUGX } = req.body;
+app.put('/api/admin/settings', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { referralPercentage, minWithdrawUGX, minDepositUGX, withdrawalFeeRate, dailyRewardRate, welcomeBonusUGX, investmentLockDays } = req.body;
+  const userId = (req as any).userId;
+  const username = (req as any).userRecord?.username || 'admin';
+  
   if (referralPercentage !== undefined) {
     systemSettingsDatabase.referralPercentage = Math.max(0, Math.min(100, Number(referralPercentage)));
   }
   if (minWithdrawUGX !== undefined) {
     systemSettingsDatabase.minWithdrawUGX = Math.max(1000, Math.round(Number(minWithdrawUGX)));
+  }
+  if (minDepositUGX !== undefined) {
+    systemSettingsDatabase.minDepositUGX = Math.max(1000, Math.round(Number(minDepositUGX)));
   }
   if (withdrawalFeeRate !== undefined) {
     systemSettingsDatabase.withdrawalFeeRate = Math.max(0, Math.min(0.5, Number(withdrawalFeeRate)));
@@ -1534,8 +1601,14 @@ app.put('/api/admin/settings', requireAuth, requireAdmin, (req: Request, res: Re
   if (welcomeBonusUGX !== undefined) {
     systemSettingsDatabase.welcomeBonusUGX = Math.max(0, Math.round(Number(welcomeBonusUGX)));
   }
+  if (investmentLockDays !== undefined) {
+    systemSettingsDatabase.investmentLockDays = Math.max(0, Math.round(Number(investmentLockDays)));
+  }
   systemSettingsDatabase.updatedAt = new Date().toISOString();
-  saveDatabaseToDisk();
+  systemSettingsDatabase.updatedBy = username;
+  
+  // Save to Supabase
+  await saveSystemSettingsToSupabase();
 
   res.json({
     success: true,
@@ -1796,6 +1869,9 @@ app.post('/api/admin/tasks/:id/reject', requireAuth, requireAdmin, (req: Request
 // VITE SPA & STATIC ASSET SERVER
 // ==========================================
 async function startServer() {
+  // Load system settings from Supabase on startup
+  await loadSystemSettingsFromSupabase();
+  
   if (process.env.NODE_ENV !== 'production') {
     // Dynamically import Vite only in development
     const { createServer: createViteServer } = await import('vite');

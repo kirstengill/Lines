@@ -132,12 +132,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [editReferralPct, setEditReferralPct] = useState<number>(() => systemSettingsService.getReferralPercentage());
   const [editMinWithdraw, setEditMinWithdraw] = useState<number>(() => systemSettingsService.getMinWithdrawUGX());
   const [editWithdrawFeeRate, setEditWithdrawFeeRate] = useState<number>(() => Math.round(systemSettingsService.getWithdrawalFeeRate() * 100));
-  const [editWelcomeBonus, setEditWelcomeBonus] = useState<number>(() => systemSettingsService.getSettings().welcomeBonusUGX);
-  const [editDailyRewardRate, setEditDailyRewardRate] = useState<number>(() => Math.round(systemSettingsService.getSettings().dailyRewardRate * 100));
+  const [editWelcomeBonus, setEditWelcomeBonus] = useState<number>(() => systemSettingsService.getWelcomeBonusUGX());
+  const [editDailyRewardRate, setEditDailyRewardRate] = useState<number>(() => Math.round(systemSettingsService.getDailyRewardRate() * 100));
+  const [editInvestmentLockDays, setEditInvestmentLockDays] = useState<number>(() => systemSettingsService.getInvestmentLockDays());
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsFeedback, setSettingsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
+    // Fetch latest settings from Supabase on mount
+    systemSettingsService.fetchSettings().catch(console.error);
+    
     const unsub = systemSettingsService.subscribe((s) => {
       setCurrentSettings(s);
       setEditReferralPct(s.referralPercentage);
@@ -145,6 +149,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setEditWithdrawFeeRate(Math.round(s.withdrawalFeeRate * 100));
       setEditWelcomeBonus(s.welcomeBonusUGX);
       setEditDailyRewardRate(Math.round(s.dailyRewardRate * 100));
+      setEditInvestmentLockDays(s.investmentLockDays);
     });
     return unsub;
   }, []);
@@ -169,6 +174,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectFormError, setProjectFormError] = useState('');
   const [projectFormLoading, setProjectFormLoading] = useState(false);
+  
+  // Inline Cycle Period Editing State
+  const [editingCyclePeriodId, setEditingCyclePeriodId] = useState<string | null>(null);
+  const [editingCyclePeriodDays, setEditingCyclePeriodDays] = useState<number | null>(null);
+  const [savingCyclePeriod, setSavingCyclePeriod] = useState<string | null>(null);
 
   // Project Image Upload State (Supabase Storage: bucket 'project-images')
   const [imageUploading, setImageUploading] = useState(false);
@@ -413,9 +423,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       const res = await systemSettingsService.updateSettings({
         referralPercentage: Math.max(0, Math.min(100, Number(editReferralPct))),
         minWithdrawUGX: Math.max(1000, Math.round(Number(editMinWithdraw))),
+        minDepositUGX: currentSettings.minDepositUGX,
         withdrawalFeeRate: Math.max(0, Math.min(50, Number(editWithdrawFeeRate))) / 100,
         welcomeBonusUGX: Math.max(0, Math.round(Number(editWelcomeBonus))),
         dailyRewardRate: Math.max(0, Number(editDailyRewardRate)) / 100,
+        investmentLockDays: Math.max(0, Math.round(Number(editInvestmentLockDays))),
       });
 
       if (!res.success) {
@@ -423,6 +435,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       } else {
         setSettingsFeedback({ type: 'success', message: 'System settings saved and synchronized successfully.' });
         showToast('System configuration updated in Supabase.');
+        // Refresh settings to ensure we have the latest from the server
+        await systemSettingsService.refreshSettings();
       }
     } catch (err: any) {
       setSettingsFeedback({ type: 'error', message: err.message || 'Error updating settings.' });
@@ -661,6 +675,50 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to delete project.', 'error');
+    }
+  };
+
+  // Handle inline cycle period update - saves instantly
+  const handleUpdateProductCyclePeriod = async (projectId: string, newDays: number) => {
+    if (!newDays || newDays <= 0) {
+      showToast('Please enter a valid cycle period (days must be > 0).', 'error');
+      return;
+    }
+    
+    setSavingCyclePeriod(projectId);
+    try {
+      // Find the project in catalog
+      const projectToUpdate = catalogProjects.find(p => p.id === projectId);
+      if (!projectToUpdate) {
+        showToast('Project not found.', 'error');
+        return;
+      }
+      
+      // Update via API
+      const res = await authService.updateCatalogMachine(projectId, {
+        cyclePeriodDays: newDays,
+        cyclePeriod: `${newDays} days`,
+      });
+      
+      if (res.error) {
+        showToast(res.error, 'error');
+      } else {
+        // Update local state immediately for instant feedback
+        setCatalogProjects(prev => 
+          prev.map(p => 
+            p.id === projectId 
+              ? { ...p, cyclePeriodDays: newDays, cyclePeriod: `${newDays} days` }
+              : p
+          )
+        );
+        showToast(`Cycle period updated to ${newDays} days for "${projectToUpdate.title}".`, 'success');
+        setEditingCyclePeriodId(null);
+        setEditingCyclePeriodDays(null);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update cycle period.', 'error');
+    } finally {
+      setSavingCyclePeriod(null);
     }
   };
 
@@ -2088,13 +2146,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   title: '',
                   subtitle: '',
                   category: 'Boda Delivery',
+                  image: '',
                   dailyRewardUGX: 250000,
-                  minInvestUGX: 5000000,
+                  status: 'Active',
                   estYearlyROI: 120,
+                  minInvestUGX: 5000000,
+                  cyclePeriodDays: 60,
+                  cyclePeriod: '60 days',
+                  projectedReturnUGX: 0,
+                  vehicleType: 'bike',
                   hashrate: 'Commercial 150cc',
                   powerSource: 'Urban Express Dispatch',
-                  status: 'Active',
-                  image: '',
+                  uptime: '99.5%',
+                  temperature: '35.0°C',
+                  efficiency: 99.5,
+                  totalMinedUGX: 0,
+                  unclaimedRewardsUGX: 0,
+                  isBoosted: false,
+                  lockDays: currentSettings.investmentLockDays,
                 });
                 setProjectFormError('');
                 setImageUploadError('');
@@ -2167,9 +2236,44 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Cycle Period</span>
-                        <span className="font-bold text-purple-700">
-                          {proj.cyclePeriod || (proj.cyclePeriodDays ? `${proj.cyclePeriodDays} Days` : 'Continuous')}
-                        </span>
+                        {editingCyclePeriodId === proj.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={editingCyclePeriodDays ?? proj.cyclePeriodDays ?? ''}
+                              onChange={(e) => setEditingCyclePeriodDays(Number(e.target.value))}
+                              className="w-16 px-1.5 py-0.5 bg-white border border-purple-300 rounded-lg text-[11px] font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                            />
+                            <button
+                              onClick={async () => {
+                                const newDays = editingCyclePeriodDays ?? proj.cyclePeriodDays;
+                                if (newDays && newDays > 0) {
+                                  await handleUpdateProductCyclePeriod(proj.id, newDays);
+                                }
+                              }}
+                              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingCyclePeriodId(null)}
+                              className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span 
+                            className="font-bold text-purple-700 cursor-pointer hover:text-purple-800"
+                            onClick={() => {
+                              setEditingCyclePeriodId(proj.id);
+                              setEditingCyclePeriodDays(proj.cyclePeriodDays ?? 0);
+                            }}
+                          >
+                            {proj.cyclePeriod || (proj.cyclePeriodDays ? `${proj.cyclePeriodDays} Days` : 'Continuous')}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10.5px]">Projected Return</span>
@@ -2197,13 +2301,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => {
-                          setIsCreatingProject(false);
-                          setEditingProject(proj);
-                          setProjectFormError('');
-                          setImageUploadError('');
-                          setImageUploadSuccess(false);
+                          setEditingCyclePeriodId(proj.id);
+                          setEditingCyclePeriodDays(proj.cyclePeriodDays ?? 0);
                         }}
                         className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[11.5px] px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Edit cycle period"
                       >
                         <Edit2 className="w-3 h-3" /> Edit
                       </button>
@@ -2799,6 +2901,60 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
 
+            {/* Setting 4: Investment Lock Days */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-[13.5px] font-extrabold text-slate-900 flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-orange-600" />
+                    Investment Lock Period (Days)
+                  </label>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5">
+                    Number of days investments are locked before rewards can be claimed.
+                  </p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={editInvestmentLockDays}
+                    onChange={(e) => setEditInvestmentLockDays(Math.max(0, Math.round(Number(e.target.value))))}
+                    className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-xl text-right font-mono font-extrabold text-[15px] text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  />
+                  <span className="absolute right-2.5 top-2.5 text-slate-400 font-bold text-[13px] pointer-events-none">
+                    days
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] text-slate-400 font-medium">Presets:</span>
+                {[0, 30, 60, 90, 180].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setEditInvestmentLockDays(days)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer ${
+                      editInvestmentLockDays === days
+                        ? 'bg-orange-600 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {days} days
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-orange-100 text-[11.5px] text-slate-600">
+                <span>
+                  Current lock period: <strong className="text-orange-700 font-mono">{editInvestmentLockDays} days</strong>
+                  {editInvestmentLockDays > 0 ? ' - Users must wait this period before claiming investment rewards.' : ' - Rewards are immediately claimable.'}
+                </span>
+              </div>
+            </div>
+
             {/* Action Buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
@@ -2809,6 +2965,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   setEditWithdrawFeeRate(Math.round(currentSettings.withdrawalFeeRate * 100));
                   setEditWelcomeBonus(currentSettings.welcomeBonusUGX);
                   setEditDailyRewardRate(Math.round(currentSettings.dailyRewardRate * 100));
+                  setEditInvestmentLockDays(currentSettings.investmentLockDays);
                   setSettingsFeedback({ type: 'success', message: 'Values reset to current saved configuration.' });
                 }}
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
@@ -3281,7 +3438,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <input
                   type="text"
                   placeholder="e.g. Boda Delivery Express 150"
-                  value={editingProject.title || ''}
+                  value={editingProject.title ?? ''}
                   onChange={(e) => setEditingProject({ ...editingProject, title: e.target.value })}
                   required
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -3295,7 +3452,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <input
                   type="text"
                   placeholder="e.g. (Urban Courier & Quick Commerce)"
-                  value={editingProject.subtitle || ''}
+                  value={editingProject.subtitle ?? ''}
                   onChange={(e) => setEditingProject({ ...editingProject, subtitle: e.target.value })}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
@@ -3307,7 +3464,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     Category
                   </label>
                   <select
-                    value={editingProject.category || 'Boda Delivery'}
+                    value={editingProject.category ?? 'Boda Delivery'}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3328,7 +3485,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     Status
                   </label>
                   <select
-                    value={editingProject.status || 'Active'}
+                    value={editingProject.status ?? 'Active'}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3353,7 +3510,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="number"
                     placeholder="e.g. 5000000"
-                    value={editingProject.minInvestUGX || ''}
+                    value={editingProject.minInvestUGX ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3372,7 +3529,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="number"
                     placeholder="e.g. 212328"
-                    value={editingProject.dailyRewardUGX || ''}
+                    value={editingProject.dailyRewardUGX ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3393,7 +3550,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="number"
                     placeholder="e.g. 120"
-                    value={editingProject.estYearlyROI || ''}
+                    value={editingProject.estYearlyROI ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3411,7 +3568,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="text"
                     placeholder="e.g. 1.2 Ton Cargo / 150cc Engine"
-                    value={editingProject.hashrate || ''}
+                    value={editingProject.hashrate ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3432,10 +3589,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     type="number"
                     min="1"
                     placeholder="e.g. 60"
-                    value={editingProject.cyclePeriodDays || ''}
+                    value={editingProject.cyclePeriodDays ?? ''}
                     onChange={(e) => {
                       const days = Number(e.target.value);
-                      const daily = editingProject.dailyRewardUGX || 0;
+                      const daily = editingProject.dailyRewardUGX ?? 0;
                       setEditingProject({
                         ...editingProject,
                         cyclePeriodDays: days,
@@ -3454,7 +3611,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="text"
                     placeholder="e.g. 60 days"
-                    value={editingProject.cyclePeriod || ''}
+                    value={editingProject.cyclePeriod ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3472,7 +3629,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     Vehicle Type
                   </label>
                   <select
-                    value={editingProject.vehicleType || 'bike'}
+                    value={editingProject.vehicleType ?? 'bike'}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3495,7 +3652,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="number"
                     placeholder="e.g. 210000"
-                    value={editingProject.projectedReturnUGX || ''}
+                    value={editingProject.projectedReturnUGX ?? ''}
                     onChange={(e) =>
                       setEditingProject({
                         ...editingProject,
@@ -3514,7 +3671,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <input
                   type="text"
                   placeholder="e.g. Urban Delivery Hub / Inter-City Highway"
-                  value={editingProject.powerSource || ''}
+                  value={editingProject.powerSource ?? ''}
                   onChange={(e) =>
                     setEditingProject({
                       ...editingProject,
@@ -3523,6 +3680,77 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   }
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Uptime
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 99.5%"
+                    value={editingProject.uptime ?? ''}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        uptime: e.target.value,
+                      })
+                    }
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Temperature
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 35.0°C"
+                    value={editingProject.temperature ?? ''}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        temperature: e.target.value,
+                      })
+                    }
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                    Efficiency
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 99.5"
+                    value={editingProject.efficiency ?? ''}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        efficiency: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-2">
+                <label className="text-[12.5px] font-bold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingProject.isBoosted ?? false}
+                    onChange={(e) =>
+                      setEditingProject({
+                        ...editingProject,
+                        isBoosted: e.target.checked,
+                      })
+                    }
+                    className="mr-2 accent-blue-600"
+                  />
+                  Boosted / Featured Project
+                </label>
               </div>
 
               {/* Supabase Storage Image Upload & Live Preview */}
@@ -3605,7 +3833,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="url"
                     placeholder="https://...supabase.co/storage/v1/object/public/project-images/..."
-                    value={editingProject.image || ''}
+                    value={editingProject.image ?? ''}
                     onChange={(e) => {
                       setImageUploadSuccess(false);
                       setImageUploadError('');

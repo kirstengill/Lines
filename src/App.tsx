@@ -35,6 +35,7 @@ import {
 import { Machine, WalletState, Transaction, AdminTask, AppNotification, UserProfile } from './types';
 import { authService, UserAccountData, cleanReferralCode } from './services/supabaseAuth';
 import { getSupabaseClient } from './services/supabase';
+import { systemSettingsService } from './services/systemSettings';
 import { Lock, AlertTriangle } from 'lucide-react';
 
 export default function App() {
@@ -112,12 +113,15 @@ export default function App() {
     }
   }, []);
 
-  // Restore authenticated session on app boot
+  // Restore authenticated session and system settings on app boot
   useEffect(() => {
     let isMounted = true;
     async function restore() {
       setIsSessionLoading(true);
       try {
+        // Load system settings from Supabase
+        await systemSettingsService.fetchSettings();
+        
         const { user: restoredUser, data: restoredData } = await authService.restoreSession();
         if (isMounted) {
           if (restoredUser && restoredData) {
