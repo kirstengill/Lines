@@ -7,7 +7,7 @@
 const BASE = 'http://localhost:3000';
 
 async function run() {
-  console.log('Testing SolNova Capital local Express backend API at', BASE);
+  console.log('Testing FleetVest local Express backend API at', BASE);
   let passCount = 0;
   let totalCount = 0;
 

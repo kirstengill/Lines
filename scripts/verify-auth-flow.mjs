@@ -28,7 +28,7 @@ const normalize = (u) => {
 
 // ---- A/B/C: Sign up a new normal user, confirm profile + wallet
 const uname = `testuser_${Date.now().toString(36)}`;
-const email = `${normalize(uname)}@sunrise-ds.com`;
+const email = `${normalize(uname)}@fleetvest.app`;
 const pass = 'TestPass123!';
 
 const { data: su, error: suErr } = await sb.auth.signUp({
@@ -52,7 +52,7 @@ if (!su?.user) {
   check('J. coolman is_admin=true per requirement', coolmanProfile?.is_admin === true);
   const asAdmin = coolmanProfile?.is_admin === true;
   check('J2. admin gate opens Admin Panel for coolman (isAdmin===true)', asAdmin === true);
-  const { error: badErrX } = await sb.auth.signInWithPassword({ email: 'coolman@sunrise-ds.com', password: 'definitely-wrong' });
+  const { error: badErrX } = await sb.auth.signInWithPassword({ email: 'coolman@fleetvest.app', password: 'definitely-wrong' });
   check('H1. wrong password -> specific invalid_credentials error', badErrX?.code === 'invalid_credentials', badErrX?.code);
   process.exit(1);
 }
@@ -78,11 +78,11 @@ const { data: afterOut } = await sb.auth.getSession();
 check('D. sign out clears session', !afterOut.session);
 
 const { data: si, error: siErr } = await sb.auth.signInWithPassword({
-  email: `${normalize('  TESTUSER_' + Date.now().toString(36))}@sunrise-ds.com`, // wrong on purpose first? no—use real:
+  email: `${normalize('  TESTUSER_' + Date.now().toString(36))}@fleetvest.app`, // wrong on purpose first? no—use real:
 });
 // real sign-in with the SAME normalization rules as the UI:
 const { data: si2, error: siErr2 } = await sb.auth.signInWithPassword({
-  email: `${normalize(` ${uname.toUpperCase()} `)}@sunrise-ds.com`,
+  email: `${normalize(` ${uname.toUpperCase()} `)}@fleetvest.app`,
   password: pass,
 });
 check('E. sign in again via username normalization (trim/lowercase)', !siErr2 && !!si2?.session, siErr2?.message);
@@ -103,7 +103,7 @@ check('G. getSession() restores a valid session (persistSession)', !!rs.session 
 const { error: badErr } = await sb.auth.signInWithPassword({ email, password: 'definitely-wrong' });
 check('H1. wrong password -> specific invalid_credentials error', badErr?.code === 'invalid_credentials', badErr?.code);
 const { error: unknownErr } = await sb.auth.signInWithPassword({
-  email: `${normalize('no_such_user_xyz')}@sunrise-ds.com`, password: 'whatever123',
+  email: `${normalize('no_such_user_xyz')}@fleetvest.app`, password: 'whatever123',
 });
 check('H2. nonexistent user -> specific error (not generic)', !!unknownErr, unknownErr?.code);
 

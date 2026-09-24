@@ -86,7 +86,7 @@ BEGIN
   -- Welcome notification
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
   VALUES ('notif_welcome_' || new.id::text, new.id,
-          'Welcome to Sunrise Capital DS',
+          'Welcome to FleetVest',
           'Make and complete your first deposit to unlock your UGX 4,000 Welcome Bonus with 0% fee!',
           false, 'info')
   ON CONFLICT (id) DO NOTHING;
@@ -1086,7 +1086,7 @@ BEGIN
       ON CONFLICT (id) DO NOTHING;
 
       INSERT INTO public.notifications (id, user_id, title, message, read, type)
-      VALUES ('notif_welcome_' || r.id::text, r.id, 'Welcome to Sunrise Capital DS',
+      VALUES ('notif_welcome_' || r.id::text, r.id, 'Welcome to FleetVest',
               'UGX 4,000 signup bonus has been credited to your wallet.', false, 'success')
       ON CONFLICT (id) DO NOTHING;
     END IF;

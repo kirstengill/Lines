@@ -158,7 +158,7 @@ class AuthService {
     const clean = this.normalizeUsername(identifier);
     if (!clean) return '';
     if (clean.includes('@')) return clean;
-    const domain = (import.meta.env.VITE_AUTH_EMAIL_DOMAIN as string) || 'sunrise-ds.com';
+    const domain = (import.meta.env.VITE_AUTH_EMAIL_DOMAIN as string) || 'fleetvest.app';
     return `${clean}@${domain}`;
   }
 
@@ -244,7 +244,7 @@ class AuthService {
         const emailCandidates = Array.from(
           new Set([
             this.formatEmail(cleanInput),
-            `${this.normalizeUsername(cleanInput)}@sunrise-ds.com`,
+            `${this.normalizeUsername(cleanInput)}@fleetvest.app`,
             `${this.normalizeUsername(cleanInput)}@users.fleetvest.app`,
           ].filter(Boolean))
         );
@@ -452,8 +452,6 @@ class AuthService {
       try {
         localStorage.removeItem('fleetvest_session_token');
         localStorage.removeItem('fleetvest_session_user_id');
-        localStorage.removeItem('solnova_session_token');
-        localStorage.removeItem('solnova_session_user_id');
       } catch {}
     }
 

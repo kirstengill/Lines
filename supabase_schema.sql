@@ -1,5 +1,5 @@
 -- ==========================================================
--- SUNRISE CAPITAL DS PLATFORM - SUPABASE DATABASE SCHEMA
+-- FLEETVEST PLATFORM - SUPABASE DATABASE SCHEMA
 -- Execute this SQL script in Supabase Dashboard -> SQL Editor
 -- ==========================================================
 
@@ -213,7 +213,7 @@ BEGIN
     ) VALUES (
         'notif_welcome_' || new.id,
         new.id,
-        'Welcome to Sunrise Capital DS',
+        'Welcome to FleetVest',
         'Your registration was successful! UGX 4,000 welcome credit has been deposited to your account balance.',
         false,
         'success'

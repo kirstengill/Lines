@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -353,11 +353,11 @@ app.post('/api/auth/signin', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Authentication is not configured. Set SUPABASE_URL and a service or anon key.' });
   }
 
-  const authEmailDomain = process.env.AUTH_EMAIL_DOMAIN || process.env.VITE_AUTH_EMAIL_DOMAIN || 'sunrise-ds.com';
+  const authEmailDomain = process.env.AUTH_EMAIL_DOMAIN || process.env.VITE_AUTH_EMAIL_DOMAIN || 'fleetvest.app';
   const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@${authEmailDomain}`;
   const altEmails = [
     internalEmail,
-    `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`,
+    `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@fleetvest.app`,
     `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@users.fleetvest.app`,
   ];
 
@@ -494,7 +494,7 @@ app.post('/api/auth/signup', async (req: Request, res: Response) => {
   // Sync account with Supabase Auth if available
   if (supabaseAdmin) {
     try {
-      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@sunrise-ds.com`;
+      const internalEmail = `${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}@fleetvest.app`;
       const { data: supaData, error: supaErr } = await supabaseAdmin.auth.signUp({
         email: internalEmail,
         password,
@@ -908,7 +908,7 @@ app.post('/api/wallet/deposit', requireAuth, (req: Request, res: Response) => {
     status: 'pending', // PENDING ADMIN APPROVAL (Balance remains unchanged)
     description: desc,
     paymentMethod: methodLabel,
-    recipientInfo: referenceInfo || 'Sunrise Capital Treasury',
+    recipientInfo: referenceInfo || 'FleetVest Treasury',
     txHash: `0x${Math.random().toString(16).substring(2, 10)}...dep`,
   };
 

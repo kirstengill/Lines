@@ -1,5 +1,5 @@
 -- ============================================================
--- Sunrise Capital — Investment plan correction (amounts + daily rewards)
+-- FleetVest — Investment plan correction (amounts + daily rewards)
 -- Run this ONCE in the Supabase Dashboard > SQL Editor.
 --
 -- Business schedule: higher plans earn progressively better daily rates.
