@@ -42,9 +42,12 @@ REVOKE EXECUTE ON FUNCTION public.is_admin() FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
 -- ============================================================
--- 2. SIGNUP TRIGGER: profile + wallet(4000) + bonus tx + notification
+-- 2. SIGNUP TRIGGER: profile + funded wallet(4000) + bonus tx + notification
 --    Idempotent & retry-safe. Referral handled AFTER trigger via
 --    handle_referral() (see section 3) because auth.users FK must exist.
+--    The bonus is credited immediately; the deployed version
+--    (20260925_credit_welcome_bonus_on_signup.sql) reads the amount from
+--    public.system_settings.welcome_bonus_ugx.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
@@ -54,41 +57,45 @@ DECLARE
   v_username TEXT;
   v_fullname TEXT;
   v_phone TEXT;
-  v_role TEXT;
-  v_ref_code TEXT;
-  v_referred_by TEXT;
+  v_bonus NUMERIC := 4000;
 BEGIN
   v_username := COALESCE(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1));
   v_fullname := COALESCE(NULLIF(new.raw_user_meta_data->>'full_name',''), v_username);
   v_phone    := COALESCE(new.raw_user_meta_data->>'phone', '');
-  v_role     := 'user'; -- never trust client-supplied role
-  v_referred_by := NULLIF(new.raw_user_meta_data->>'referred_by','');
-  v_ref_code := COALESCE(NULLIF(new.raw_user_meta_data->>'referral_code',''),
-                         'SC-' || upper(substring(md5(random()::text || new.id::text) from 1 for 6)));
 
-  -- Profile (idempotent; welcome_bonus_claimed starts as false)
+  -- Profile (idempotent; bonus is credited now, so it starts as claimed)
   INSERT INTO public.profiles (id, username, full_name, phone, role, status, tier,
                                referral_code, referred_by, welcome_bonus_claimed, is_admin)
-  VALUES (new.id, v_username, v_fullname, v_phone, v_role, 'active',
-          CASE WHEN v_role = 'admin' THEN 'VIP 2 Elite' ELSE 'Standard' END,
-          v_ref_code, v_referred_by, false, false)
+  VALUES (new.id, v_username, v_fullname, v_phone, 'user', 'active', 'Standard',
+          COALESCE(NULLIF(new.raw_user_meta_data->>'referral_code',''),
+                   'SC-' || upper(substring(md5(random()::text || new.id::text) from 1 for 6))),
+          NULLIF(new.raw_user_meta_data->>'referred_by',''), true, false)
   ON CONFLICT (id) DO UPDATE SET
     username = EXCLUDED.username,
     full_name = EXCLUDED.full_name,
     updated_at = now();
 
-  -- Wallet (idempotent, starts with 0 UGX)
+  -- Wallet funded with the welcome bonus (idempotent)
   INSERT INTO public.wallets (user_id, total_balance_ugx, daily_pnl_ugx,
                               active_machines_count, pending_tasks_count)
-  VALUES (new.id, 0, 0, 0, 0)
+  VALUES (new.id, v_bonus, 0, 0, 0)
   ON CONFLICT (user_id) DO NOTHING;
+
+  -- Bonus ledger entry
+  INSERT INTO public.transactions (id, user_id, type, amount_ugx, currency, status,
+                                   description, is_credit, timestamp, created_at)
+  VALUES ('tx_welcome_' || new.id::text, new.id, 'bonus', v_bonus, 'UGX', 'completed',
+          'Welcome Signup Bonus — UGX ' || v_bonus::text || ' credited to your wallet', true,
+          round(extract(epoch from now()) * 1000)::bigint, now())
+  ON CONFLICT (id) DO NOTHING;
 
   -- Welcome notification
   INSERT INTO public.notifications (id, user_id, title, message, read, type)
   VALUES ('notif_welcome_' || new.id::text, new.id,
           'Welcome to FleetVest',
-          'Make and complete your first deposit to unlock your UGX 4,000 Welcome Bonus with 0% fee!',
-          false, 'info')
+          'Your registration was successful! UGX ' || v_bonus::text
+            || ' welcome bonus has been credited to your wallet balance.',
+          false, 'success')
   ON CONFLICT (id) DO NOTHING;
 
   RETURN new;
@@ -1048,11 +1055,13 @@ CREATE POLICY "adjust_select" ON public.balance_adjustments FOR SELECT
   USING (auth.uid() = user_id OR public.is_admin());
 
 -- ============================================================
--- 13. Repair any EXISTING users that signed up under the old
---     broken trigger (missing bonus tx / notification / balance)
+-- 13. Repair any EXISTING users that signed up without the
+--     welcome bonus (missing balance credit / bonus tx /
+--     notification / claimed flag)
 -- ============================================================
 DO $$
 DECLARE r RECORD;
+        v_bonus NUMERIC := 4000;
 BEGIN
   FOR r IN SELECT u.id FROM auth.users u
            LEFT JOIN public.profiles p ON p.id = u.id
@@ -1071,24 +1080,39 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END LOOP;
 
-  FOR r IN SELECT u.id FROM auth.users u
+  FOR r IN
+    SELECT p.id FROM public.profiles p
+    WHERE COALESCE(p.welcome_bonus_claimed, false) = false
+      AND NOT EXISTS (
+        SELECT 1 FROM public.transactions t WHERE t.id = 'tx_welcome_' || p.id::text
+      )
   LOOP
-    INSERT INTO public.wallets (user_id, total_balance_ugx, daily_pnl_ugx, active_machines_count, pending_tasks_count)
-    VALUES (r.id, 4000, 0, 0, 0) ON CONFLICT (user_id) DO NOTHING;
+    INSERT INTO public.wallets (user_id, total_balance_ugx, daily_pnl_ugx,
+                                active_machines_count, pending_tasks_count)
+    VALUES (r.id, v_bonus, 0, 0, 0)
+    ON CONFLICT (user_id) DO UPDATE SET
+      total_balance_ugx = public.wallets.total_balance_ugx + v_bonus,
+      updated_at = now();
 
-    -- Only credit the bonus if user has NO wallet bonus tx already and balance wasn't manually topped up
-    IF NOT EXISTS (SELECT 1 FROM public.transactions WHERE id = 'tx_welcome_' || r.id::text) THEN
-      INSERT INTO public.transactions (id, user_id, type, amount_ugx, currency, status,
-                                       description, is_credit, timestamp, created_at)
-      VALUES ('tx_welcome_' || r.id::text, r.id, 'bonus', 4000, 'UGX', 'completed',
-              'Welcome Signup Bonus — UGX 4,000 credited to your wallet', true,
-              now(), now())
-      ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.transactions (id, user_id, type, amount_ugx, currency, status,
+                                     description, is_credit, timestamp, created_at)
+    VALUES ('tx_welcome_' || r.id::text, r.id, 'bonus', v_bonus, 'UGX', 'completed',
+            'Welcome Signup Bonus — UGX ' || v_bonus::text || ' credited to your wallet', true,
+            now(), now())
+    ON CONFLICT (id) DO NOTHING;
 
-      INSERT INTO public.notifications (id, user_id, title, message, read, type)
-      VALUES ('notif_welcome_' || r.id::text, r.id, 'Welcome to FleetVest',
-              'UGX 4,000 signup bonus has been credited to your wallet.', false, 'success')
-      ON CONFLICT (id) DO NOTHING;
-    END IF;
+    INSERT INTO public.notifications (id, user_id, title, message, read, type)
+    VALUES ('notif_welcome_' || r.id::text, r.id, 'Welcome to FleetVest',
+            'Your registration was successful! UGX ' || v_bonus::text
+              || ' welcome bonus has been credited to your wallet balance.',
+            false, 'success')
+    ON CONFLICT (id) DO UPDATE SET
+      title = EXCLUDED.title,
+      message = EXCLUDED.message,
+      type = EXCLUDED.type;
+
+    UPDATE public.profiles
+    SET welcome_bonus_claimed = true, updated_at = now()
+    WHERE id = r.id;
   END LOOP;
 END $$;

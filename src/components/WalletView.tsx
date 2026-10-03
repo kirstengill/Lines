@@ -7,27 +7,20 @@ interface WalletViewProps {
   wallet: WalletState;
   transactions: Transaction[];
   user?: UserProfile | null;
-  onRefresh?: () => Promise<void> | void;
   onOpenDeposit: () => void;
   onOpenWithdraw: () => void;
-  onOpenWithdrawWelcomeBonus?: () => void;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
   wallet,
   transactions,
   user = null,
-  onRefresh,
   onOpenDeposit,
   onOpenWithdraw,
-  onOpenWithdrawWelcomeBonus,
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
 
   const pendingCount = transactions.filter((t) => t.status === 'pending').length;
-  const hasApprovedDeposit = transactions.some(
-    (t) => t.type === 'deposit' && (t.status === 'completed' || t.status === 'approved')
-  );
 
   const filteredTx = transactions.filter((t) => {
     if (filterType === 'all') return true;
@@ -80,14 +73,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
         </div>
       </div>
 
-      {/* Welcome Bonus Card (State-aware: Locked before deposit, Ready after deposit, Claimed) */}
+      {/* Welcome Bonus Card (credited to wallet at sign up) */}
       <WelcomeBonusCard
         user={user}
-        hasApprovedDeposit={hasApprovedDeposit}
-        welcomeBonusClaimed={user?.welcomeBonusClaimed}
-        onClaimSuccess={onRefresh}
         onOpenDeposit={onOpenDeposit}
-        onOpenWithdraw={onOpenWithdrawWelcomeBonus || onOpenWithdraw}
+        onOpenWithdraw={onOpenWithdraw}
       />
 
       {/* Transaction History & Approval Ledger */}

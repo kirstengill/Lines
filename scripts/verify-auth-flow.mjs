@@ -72,6 +72,30 @@ const { data: wallet } = await sb.from('wallets').select('*').eq('user_id', su.u
 check('C3. wallet created with welcome credit', !!wallet && Number(wallet.total_balance_ugx) === 4000,
   wallet ? `balance=${wallet.total_balance_ugx}` : 'missing');
 
+// ---- C4/C5: signup welcome notification carries FleetVest branding only
+const { data: welcomeNotifs } = await sb
+  .from('notifications')
+  .select('id, title, message')
+  .eq('user_id', su.user.id)
+  .ilike('title', '%welcome%');
+const branded = (welcomeNotifs || []).filter((n) => /fleetvest/i.test(`${n.title} ${n.message}`));
+check('C4. welcome notification branded FleetVest', branded.length > 0,
+  welcomeNotifs?.[0]?.title || 'no welcome notification');
+const legacy = (welcomeNotifs || []).filter((n) => /sunrise/i.test(`${n.title} ${n.message}`));
+check('C5. no retired "Sunrise Capital" branding in notifications', legacy.length === 0,
+  legacy[0]?.title || '');
+
+const { data: bonusTx } = await sb
+  .from('transactions')
+  .select('id, amount_ugx, status')
+  .eq('id', `tx_welcome_${su.user.id}`)
+  .maybeSingle();
+check('C6. welcome bonus ledger entry recorded at signup', !!bonusTx && bonusTx.status === 'completed',
+  bonusTx ? `amount=${bonusTx.amount_ugx} status=${bonusTx.status}` : 'missing');
+
+check('C7. profile marked as welcome bonus claimed at signup', profile?.welcome_bonus_claimed === true,
+  `welcome_bonus_claimed=${profile?.welcome_bonus_claimed}`);
+
 // ---- D/E/F/G: Sign out, sign back in by username, session persists after "refresh"
 await sb.auth.signOut();
 const { data: afterOut } = await sb.auth.getSession();

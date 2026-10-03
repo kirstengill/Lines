@@ -202,6 +202,29 @@ BEGIN
         0
     ) ON CONFLICT (user_id) DO NOTHING;
 
+    -- Insert Welcome Bonus Ledger Entry
+    INSERT INTO public.transactions (
+        id,
+        user_id,
+        type,
+        amount_ugx,
+        currency,
+        status,
+        description,
+        is_credit,
+        created_at
+    ) VALUES (
+        'tx_welcome_' || new.id::text,
+        new.id,
+        'bonus',
+        4000,
+        'UGX',
+        'completed',
+        'Welcome Signup Bonus — UGX 4,000 credited to your wallet',
+        true,
+        timezone('utc'::text, now())
+    ) ON CONFLICT (id) DO NOTHING;
+
     -- Insert Initial Welcome Bonus Notification
     INSERT INTO public.notifications (
         id,
@@ -214,7 +237,7 @@ BEGIN
         'notif_welcome_' || new.id,
         new.id,
         'Welcome to FleetVest',
-        'Your registration was successful! UGX 4,000 welcome credit has been deposited to your account balance.',
+        'Your registration was successful! UGX 4,000 welcome bonus has been credited to your wallet balance.',
         false,
         'success'
     ) ON CONFLICT DO NOTHING;

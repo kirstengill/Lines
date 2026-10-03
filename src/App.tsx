@@ -95,7 +95,6 @@ export default function App() {
   const [depositWithdrawModal, setDepositWithdrawModal] = useState<{
     open: boolean;
     mode: 'deposit' | 'withdraw';
-    isWelcomeBonus?: boolean;
   }>({ open: false, mode: 'deposit' });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
@@ -526,19 +525,12 @@ export default function App() {
                     onWithdraw={() => setDepositWithdrawModal({ open: true, mode: 'withdraw' })}
                   />
 
-                  {/* Welcome Bonus Card (State-aware: Locked before deposit, Ready after deposit, Claimed) */}
+                  {/* Welcome Bonus Card (credited to wallet at sign up) */}
                   <div className="px-5 mb-3.5">
                     <WelcomeBonusCard
                       user={user}
-                      hasApprovedDeposit={transactions.some(
-                        (t) => t.type === 'deposit' && (t.status === 'completed' || t.status === 'approved')
-                      )}
-                      welcomeBonusClaimed={user?.welcomeBonusClaimed}
-                      onClaimSuccess={handleRefreshUserData}
                       onOpenDeposit={() => setDepositWithdrawModal({ open: true, mode: 'deposit' })}
-                      onOpenWithdraw={() =>
-                        setDepositWithdrawModal({ open: true, mode: 'withdraw', isWelcomeBonus: true })
-                      }
+                      onOpenWithdraw={() => setDepositWithdrawModal({ open: true, mode: 'withdraw' })}
                     />
                   </div>
 
@@ -615,12 +607,8 @@ export default function App() {
                     wallet={wallet}
                     transactions={transactions}
                     user={user}
-                    onRefresh={handleRefreshUserData}
                     onOpenDeposit={() => setDepositWithdrawModal({ open: true, mode: 'deposit' })}
-                    onOpenWithdraw={() => setDepositWithdrawModal({ open: true, mode: 'withdraw', isWelcomeBonus: false })}
-                    onOpenWithdrawWelcomeBonus={() =>
-                      setDepositWithdrawModal({ open: true, mode: 'withdraw', isWelcomeBonus: true })
-                    }
+                    onOpenWithdraw={() => setDepositWithdrawModal({ open: true, mode: 'withdraw' })}
                   />
                 </div>
               )}
@@ -680,11 +668,6 @@ export default function App() {
         {depositWithdrawModal.open && (
           <DepositWithdrawModal
             mode={depositWithdrawModal.mode}
-            initialIsWelcomeBonus={depositWithdrawModal.isWelcomeBonus}
-            hasApprovedDeposit={transactions.some(
-              (t) => t.type === 'deposit' && (t.status === 'completed' || t.status === 'approved')
-            )}
-            welcomeBonusClaimed={user?.welcomeBonusClaimed}
             balanceUGX={wallet.totalBalanceUGX}
             onSwitchMode={(m) => setDepositWithdrawModal({ open: true, mode: m })}
             onClose={() => setDepositWithdrawModal({ open: false, mode: 'deposit' })}
