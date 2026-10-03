@@ -3,6 +3,7 @@ import { X, Check, AlertCircle, ShieldCheck, Wallet, Clock, Truck } from 'lucide
 import confetti from 'canvas-confetti';
 import { Machine } from '../types';
 import { ProjectImage } from './ProjectImage';
+import { calculateDailyReturn } from '../utils/investmentReturns';
 
 interface InvestmentPurchaseModalProps {
   machine: Machine | null;
@@ -28,7 +29,8 @@ export const InvestmentPurchaseModal: React.FC<InvestmentPurchaseModalProps> = (
   const isInsufficient = userBalanceUGX < amountUGX;
   const cycleDays = machine.cyclePeriodDays || 60;
   const cycleText = machine.cyclePeriod || `${cycleDays} days`;
-  const estDailyYield = Math.round((amountUGX / machine.minInvestUGX) * machine.dailyRewardUGX);
+  const baseDailyRewardUGX = machine.dailyRewardUGX;
+  const estDailyYield = calculateDailyReturn(baseDailyRewardUGX, amountUGX, machine.minInvestUGX);
   const estTotalReturn = estDailyYield * cycleDays;
 
   const handleInvest = async () => {
@@ -146,6 +148,11 @@ export const InvestmentPurchaseModal: React.FC<InvestmentPurchaseModalProps> = (
                 +UGX {estDailyYield.toLocaleString()} / day
               </span>
             </div>
+            <p className="text-[10.5px] text-slate-400 leading-snug">
+              Base quote: UGX {baseDailyRewardUGX.toLocaleString()} / day from a UGX{' '}
+              {machine.minInvestUGX.toLocaleString()} stake. The return scales with your
+              investment, so a larger stake earns more per day.
+            </p>
             <div className="flex justify-between items-center text-slate-300">
               <span>Cycle Period:</span>
               <span className="font-bold text-sky-400">

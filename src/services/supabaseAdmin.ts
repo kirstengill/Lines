@@ -16,6 +16,7 @@ import {
 import { AVAILABLE_CATALOG } from '../data/initialData';
 import { apiClient } from './apiClient';
 import { systemSettingsService } from './systemSettings';
+import { calculateDailyReturn } from '../utils/investmentReturns';
 
 export interface SubmitTransactionInput {
   type: 'deposit' | 'withdraw';
@@ -240,13 +241,24 @@ export const supabaseAdmin = {
         ? { id: machineOrId, minInvestUGX: amountUGX }
         : machineOrId;
 
-    const cost = Number(machineObj.minInvestUGX || amountUGX || 0);
+    // The stake the user actually chose is the amount charged; the product
+    // minimum is only a floor.
+    const minInvestUGX = Number(machineObj.minInvestUGX) || 0;
+    const cost = Math.max(Number(amountUGX) || 0, minInvestUGX);
     if (!cost || cost <= 0) {
       return { success: false, error: 'Invalid investment machine amount.' };
     }
 
+    // Daily return scales with the stake, so the figure persisted on the row
+    // (and later accrued by claim_reward) matches the amount really invested
+    // instead of the flat per-product base quote.
+    const dailyRewardUGX = calculateDailyReturn(machineObj.dailyRewardUGX, cost, minInvestUGX);
+
     if (!sb) {
-      const res = await apiClient.buyInvestment(machineOrId, cost);
+      const res = await apiClient.buyInvestment(
+        { ...machineObj, minInvestUGX: cost, dailyRewardUGX },
+        cost
+      );
       return {
         success: !res.error,
         investment: res.investment,
@@ -263,7 +275,7 @@ export const supabaseAdmin = {
         p_category: machineObj.category || 'Urban Delivery',
         p_image: machineObj.image || 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=80',
         p_amount_ugx: cost,
-        p_daily_reward_ugx: Number(machineObj.dailyRewardUGX || 0),
+        p_daily_reward_ugx: dailyRewardUGX,
         p_hashrate: machineObj.hashrate || 'Commercial 150cc',
         p_power_source: machineObj.powerSource || 'Transport & Logistics',
         p_est_roi: Number(machineObj.estYearlyROI || 120),

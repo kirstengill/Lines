@@ -38,6 +38,33 @@ import { getSupabaseClient } from './services/supabase';
 import { systemSettingsService } from './services/systemSettings';
 import { Lock, AlertTriangle } from 'lucide-react';
 
+// Active surface of the app. 'auth' covers both "signed out" and the
+// account-switcher screen; 'admin' and 'user' are the signed-in surfaces.
+type ViewMode = 'auth' | 'admin' | 'user';
+
+const EMPTY_WALLET: WalletState = {
+  totalBalanceUGX: 0,
+  dailyPnlUGX: 0,
+  activeMachinesCount: 0,
+  pendingTasksCount: 0,
+};
+
+const EMPTY_ACCOUNT_DATA: UserAccountData = {
+  wallet: EMPTY_WALLET,
+  transactions: [],
+  machines: [],
+  adminTasks: [],
+  notifications: [],
+};
+
+// Single source of truth for role-based routing. Administrator access comes
+// ONLY from profiles.is_admin, so every sign-in path (Supabase, Express
+// fallback, session restore) resolves to the same destination.
+const resolveViewMode = (profile: UserProfile | null | undefined): ViewMode => {
+  if (!profile) return 'auth';
+  return profile.isAdmin === true ? 'admin' : 'user';
+};
+
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -73,18 +100,16 @@ export default function App() {
   // User Authentication State
   const [isSessionLoading, setIsSessionLoading] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [isAuthViewActive, setIsAuthViewActive] = useState<boolean>(false);
 
-  // Check if current user is an authorized admin — ONLY via profiles.is_admin
+  // Active View Mode: 'auth' | 'admin' | 'user'
+  const [viewMode, setViewMode] = useState<ViewMode>('auth');
+
   const isCurrentAdmin = Boolean(user && user.isAdmin === true);
   const isBlocked = Boolean(user && user.status === 'blocked');
 
-  // Active View Mode: 'auth' | 'admin' | 'user'
-  const [viewMode, setViewMode] = useState<'auth' | 'admin' | 'user'>('auth');
-
   // Application Data States
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [wallet, setWallet] = useState<WalletState>({ totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
+  const [wallet, setWallet] = useState<WalletState>(EMPTY_WALLET);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -112,6 +137,16 @@ export default function App() {
     }
   }, []);
 
+  // Applies a full account payload in one place, shared by sign-in,
+  // session restore and background refresh so the states never drift.
+  const applyAccountData = useCallback((data: UserAccountData) => {
+    setWallet(data.wallet || EMPTY_WALLET);
+    setTransactions(data.transactions || []);
+    setMachines(data.machines || []);
+    setAdminTasks(data.adminTasks || []);
+    setNotifications(data.notifications || []);
+  }, []);
+
   // Restore authenticated session and system settings on app boot
   useEffect(() => {
     let isMounted = true;
@@ -120,30 +155,22 @@ export default function App() {
       try {
         // Load system settings from Supabase
         await systemSettingsService.fetchSettings();
-        
+
         const { user: restoredUser, data: restoredData } = await authService.restoreSession();
         if (isMounted) {
           if (restoredUser && restoredData) {
             setUser(restoredUser);
-            setWallet(restoredData.wallet || { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
-            setTransactions(restoredData.transactions || []);
-            setMachines(restoredData.machines || []);
-            setAdminTasks(restoredData.adminTasks || []);
-            setNotifications(restoredData.notifications || []);
-            const isAdmin = Boolean(restoredUser.isAdmin === true);
-            setViewMode(isAdmin ? 'admin' : 'user');
-            setIsAuthViewActive(false);
+            applyAccountData(restoredData);
+            setViewMode(resolveViewMode(restoredUser));
           } else {
             setUser(null);
             setViewMode('auth');
-            setIsAuthViewActive(true);
           }
         }
       } catch {
         if (isMounted) {
           setUser(null);
           setViewMode('auth');
-          setIsAuthViewActive(true);
         }
       } finally {
         if (isMounted) {
@@ -158,11 +185,11 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [loadCatalog]);
+  }, [loadCatalog, applyAccountData]);
 
   // Periodic background synchronization with central backend for cross-device updates
   useEffect(() => {
-    if (!user?.id || isAuthViewActive || viewMode === 'auth') return;
+    if (!user?.id || viewMode === 'auth') return;
 
     const interval = setInterval(async () => {
       try {
@@ -171,13 +198,7 @@ export default function App() {
           setUser(refreshed.user);
         }
         if (refreshed.data) {
-          setWallet(refreshed.data.wallet || { totalBalanceUGX: 0, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 });
-          setTransactions(refreshed.data.transactions || []);
-          setMachines(refreshed.data.machines || []);
-          setNotifications(refreshed.data.notifications || []);
-          if (refreshed.data.adminTasks) {
-            setAdminTasks(refreshed.data.adminTasks);
-          }
+          applyAccountData(refreshed.data);
         }
       } catch {
         // Silently handle transient connection errors
@@ -185,7 +206,7 @@ export default function App() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [user?.id, isAuthViewActive, viewMode]);
+  }, [user?.id, viewMode, applyAccountData]);
 
   // Page Transition Handler for smooth navigation
   const triggerPageTransition = (callback: () => void, message: string = 'Loading...') => {
@@ -278,11 +299,7 @@ export default function App() {
       setUser(refreshed.user);
     }
     if (refreshed.data) {
-      setWallet(refreshed.data.wallet);
-      setTransactions(refreshed.data.transactions);
-      setNotifications(refreshed.data.notifications);
-      setAdminTasks(refreshed.data.adminTasks || []);
-      setMachines(refreshed.data.machines || []);
+      applyAccountData(refreshed.data);
     }
     loadCatalog();
   };
@@ -396,40 +413,24 @@ export default function App() {
       await authService.signOut();
       setUser(null);
       setViewMode('auth');
-      setIsAuthViewActive(true);
       setActiveTab('home');
     }, 'Signing out...');
   };
 
-  // Dedicated Auth Success handler with Role-Based Redirection
+  // Auth Success: resolve the signed-in account's role once, then route.
+  // Administrators land directly on the Admin Dashboard; everyone else on the
+  // user dashboard.
   const handleAuthSuccess = (authedUser: UserProfile, accountData?: UserAccountData) => {
     triggerPageTransition(() => {
       setUser(authedUser);
-      setIsAuthViewActive(false);
       setIsAuthOpen(false);
+      applyAccountData(
+        accountData || authService.getUserData(authedUser.id) || EMPTY_ACCOUNT_DATA
+      );
 
-      if (accountData) {
-        setWallet(accountData.wallet);
-        setTransactions(accountData.transactions);
-        setMachines(accountData.machines);
-        setAdminTasks(accountData.adminTasks);
-        setNotifications(accountData.notifications);
-      } else {
-        const data = authService.getUserData(authedUser.id);
-        if (data) {
-          setWallet(data.wallet);
-          setTransactions(data.transactions);
-          setMachines(data.machines);
-          setAdminTasks(data.adminTasks);
-          setNotifications(data.notifications);
-        }
-      }
-
-      const isAdminUser = Boolean(authedUser.isAdmin === true);
-      if (isAdminUser) {
-        setViewMode('admin');
-      } else {
-        setViewMode('user');
+      const nextMode = resolveViewMode(authedUser);
+      setViewMode(nextMode);
+      if (nextMode !== 'admin') {
         setActiveTab('home');
       }
     }, 'Authorizing session...');
@@ -471,7 +472,7 @@ export default function App() {
               Verifying sovereign session...
             </p>
           </div>
-        ) : (viewMode === 'auth' || !user || isAuthViewActive) ? (
+        ) : (viewMode === 'auth' || !user) ? (
           <AuthScreen
             initialReferralCode={initialReferralCode}
             onAuthSuccess={handleAuthSuccess}
@@ -508,7 +509,6 @@ export default function App() {
               }}
               onOpenAuth={() => {
                 triggerPageTransition(() => {
-                  setIsAuthViewActive(true);
                   setViewMode('auth');
                 }, 'Switching account...');
               }}
@@ -593,7 +593,6 @@ export default function App() {
                     onClaimSuccess={handleRefreshUserData}
                     onOpenAuth={() => {
                       triggerPageTransition(() => {
-                        setIsAuthViewActive(true);
                         setViewMode('auth');
                       }, 'Switching account...');
                     }}
@@ -619,7 +618,6 @@ export default function App() {
                     user={user}
                     onOpenAuth={() => {
                       triggerPageTransition(() => {
-                        setIsAuthViewActive(true);
                         setViewMode('auth');
                       }, 'Switching account...');
                     }}

@@ -1,3 +1,11 @@
+declare module 'react/jsx-runtime';
+
+declare namespace JSX {
+  interface IntrinsicElements {
+    [elemName: string]: any;
+  }
+}
+
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -6,7 +14,6 @@ import {
   Copy,
   Check,
   Smartphone,
-  CreditCard,
   ShieldAlert,
   UserCheck,
   PhoneCall,
@@ -67,7 +74,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
   const minWithdrawalUGX = systemSettings.minWithdrawUGX;
   const withdrawalFeeRate = systemSettings.withdrawalFeeRate;
 
-  const [activeTab, setActiveTab] = useState<'mtn' | 'airtel' | 'bank'>('mtn');
+  const [activeTab, setActiveTab] = useState<'mtn' | 'airtel'>('mtn');
 
   const [amountUGXStr, setAmountUGXStr] = useState<string>(() => {
     if (mode === 'withdraw') {
@@ -157,12 +164,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
     setIsProcessing(true);
     try {
-      const channelName =
-        activeTab === 'mtn'
-          ? 'MTN Mobile Money'
-          : activeTab === 'airtel'
-            ? 'Airtel Money Uganda'
-            : 'Stanbic Bank EFT';
+      const channelName = activeTab === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money Uganda';
 
       const cleanSender = depositorPhone.trim();
       const desc =
@@ -333,7 +335,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   ? 'Select Your Mobile Money Network'
                   : 'Uganda Sovereign Payment Channel'}
               </label>
-              <div className={`grid gap-2 ${mode === 'deposit' ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              <div className="grid gap-2 grid-cols-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -365,24 +367,6 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   <Smartphone className="w-4 h-4 mx-auto mb-1 text-red-400" />
                   <span className="text-[11px] block font-bold">Airtel Money</span>
                 </button>
-
-                {mode === 'withdraw' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('bank');
-                      setRecipient('Stanbic Bank - 9030018829104');
-                    }}
-                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                      activeTab === 'bank'
-                        ? 'border-amber-500 bg-amber-500/15 text-amber-300 font-bold shadow-xs'
-                        : 'border-slate-800 bg-[#131722] text-slate-400 hover:text-white hover:bg-[#1C2230]'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4 mx-auto mb-1 text-amber-400" />
-                    <span className="text-[11px] block font-bold">Bank Transfer</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -700,13 +684,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
               <div className="space-y-3">
                 <div>
                   <label className="text-[12px] font-semibold text-slate-300 mb-1.5 block">
-                    Withdrawal Destination (Mobile Number / Bank Acct)
+                    Withdrawal Destination (Mobile Number)
                   </label>
                   <input
                     type="text"
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="e.g. 0772 123 456 or Stanbic Acct"
+                    placeholder="e.g. 0772 123 456"
                     className="w-full px-3.5 py-2.5 bg-[#131722] border border-amber-500/30 rounded-xl text-white text-[13.5px] focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400"
                   />
                 </div>

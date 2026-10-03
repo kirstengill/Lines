@@ -2,6 +2,7 @@ import React from 'react';
 import { Machine } from '../types';
 import { ProjectImage } from './ProjectImage';
 import { Bike, Truck, Car, Layers, ArrowRight, Clock } from 'lucide-react';
+import { calculateDailyReturn, resolveInvestedAmount } from '../utils/investmentReturns';
 
 interface InvestmentCardProps {
   machine: Machine;
@@ -14,7 +15,15 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
   onManage,
   buttonVariant = 'solid',
 }) => {
-  const formattedReward = new Intl.NumberFormat('en-US').format(machine.dailyRewardUGX);
+  // Quote the return for the stake behind this asset, so a product the user
+  // funded above its minimum never advertises the flat base figure.
+  const investedAmountUGX = resolveInvestedAmount(machine.amountInvestedUGX, machine.minInvestUGX);
+  const dailyReturnUGX = calculateDailyReturn(
+    machine.dailyRewardUGX,
+    investedAmountUGX,
+    machine.minInvestUGX
+  );
+  const formattedReward = new Intl.NumberFormat('en-US').format(dailyReturnUGX);
   const formattedMinInvest = new Intl.NumberFormat('en-US').format(machine.minInvestUGX);
   const cycleText = machine.cyclePeriod || `${machine.cyclePeriodDays || 60} days`;
 
@@ -64,8 +73,14 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
           <div className="mt-2 space-y-1 text-xs">
             <div className="flex items-baseline justify-between">
               <span className="text-slate-400">Daily Return</span>
-              <span className="font-black text-amber-400 font-mono">
+              <span
+                className="font-black text-amber-400 font-mono"
+                title={`Base quote UGX ${new Intl.NumberFormat('en-US').format(
+                  machine.dailyRewardUGX
+                )}/day from a UGX ${formattedMinInvest} stake — scaled to this asset's stake.`}
+              >
                 +UGX {formattedReward}
+                <span className="text-[10px] text-amber-200/50 font-bold">/day</span>
               </span>
             </div>
 

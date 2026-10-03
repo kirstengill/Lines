@@ -61,6 +61,7 @@ export function mapUserMachineRow(m: any): Machine {
     totalMinedUGX,
     unclaimedRewardsUGX: computed.returnStatus === 'locked' ? 0 : computed.unclaimedRewardsUGX,
     isBoosted: Boolean(m.is_boosted),
+    amountInvestedUGX: Number(m.amount_invested_ugx || m.amountInvestedUGX || 0) || undefined,
     lockDays: m.lock_days != null ? Number(m.lock_days) : undefined,
     lockUntil: lockUntil ? String(lockUntil) : undefined,
     investedAt: createdAt ? String(createdAt) : undefined,

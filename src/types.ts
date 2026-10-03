@@ -31,6 +31,7 @@ export interface Machine {
   totalMinedUGX?: number;
   unclaimedRewardsUGX?: number;
   isBoosted?: boolean;
+  amountInvestedUGX?: number;
   lockDays?: number;
   lockUntil?: string;
   investedAt?: string;
