@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Machine } from '../types';
 import { ProjectImage } from './ProjectImage';
 import { Bike, Truck, Car, Layers, ArrowRight, Clock } from 'lucide-react';
 import { calculateDailyReturn, resolveInvestedAmount } from '../utils/investmentReturns';
+import { computeReturnStatus, getRemainingLockDays } from '../services/investmentStatus';
 
 interface InvestmentCardProps {
   machine: Machine;
@@ -15,6 +16,13 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
   onManage,
   buttonVariant = 'solid',
 }) => {
+  const [now, setNow] = useState(Date.now);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Quote the return for the stake behind this asset, so a product the user
   // funded above its minimum never advertises the flat base figure.
   const investedAmountUGX = resolveInvestedAmount(machine.amountInvestedUGX, machine.minInvestUGX);
@@ -26,6 +34,15 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
   const formattedReward = new Intl.NumberFormat('en-US').format(dailyReturnUGX);
   const formattedMinInvest = new Intl.NumberFormat('en-US').format(machine.minInvestUGX);
   const cycleText = machine.cyclePeriod || `${machine.cyclePeriodDays || 60} days`;
+  const remainingLockDays = getRemainingLockDays(machine.lockUntil, now);
+  const accumulatedReturnUGX = computeReturnStatus({
+    createdAt: machine.investedAt,
+    lockUntil: machine.lockUntil,
+    dailyRewardUGX: machine.dailyRewardUGX,
+    totalMinedUGX: machine.totalMinedUGX || 0,
+    lastClaimedAt: machine.lastClaimedAt,
+    now,
+  }).unclaimedRewardsUGX;
 
   const getVehicleIcon = (title: string) => {
     const lower = title.toLowerCase();
@@ -98,6 +115,28 @@ export const InvestmentCard: React.FC<InvestmentCardProps> = ({
                 UGX {formattedMinInvest}
               </span>
             </div>
+
+            {machine.lockUntil && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-slate-400">Returns unlock</span>
+                <span className={`font-semibold font-mono ${remainingLockDays > 0 ? 'text-amber-300' : 'text-emerald-400'}`}>
+                  {remainingLockDays > 0
+                    ? `${remainingLockDays} ${remainingLockDays === 1 ? 'day' : 'days'} remaining`
+                    : 'Unlocked'}
+                </span>
+              </div>
+            )}
+
+            {machine.lockUntil && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-slate-400">
+                  {remainingLockDays > 0 ? 'Accumulated return' : 'Return to claim'}
+                </span>
+                <span className="font-semibold font-mono text-emerald-400">
+                  UGX {accumulatedReturnUGX.toLocaleString()}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

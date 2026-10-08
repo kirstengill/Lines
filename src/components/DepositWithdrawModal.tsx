@@ -39,8 +39,10 @@ export const calculateMaxWithdrawal = (balance: number, feeRate?: number): numbe
 };
 
 // Deposit receiving line details
-const DEPOSIT_PHONE = '0766495353';
-const RECIPIENT_NAME = 'ELIX OWOMUZINYA';
+const DEPOSIT_RECIPIENTS = {
+  mtn: { phone: '0763445008', name: 'HUZAIRU SSALI' },
+  airtel: { phone: '0707292508', name: 'ELIX OWOMUZINYA' },
+};
 
 interface DepositWithdrawModalProps {
   mode: 'deposit' | 'withdraw';
@@ -119,10 +121,10 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
       : numUGX;
   const youReceiveUGX = requestedWithdrawalUGX;
 
-  const depositUssd =
-    activeTab === 'airtel'
-      ? `*185*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`
-      : `*165*1*1*${DEPOSIT_PHONE}*${numUGX || 'AMOUNT'}#`;
+  const depositRecipient = DEPOSIT_RECIPIENTS[activeTab];
+  const depositUssd = `${
+    activeTab === 'airtel' ? '*185' : '*165'
+  }*1*1*${depositRecipient.phone}*${numUGX || 'AMOUNT'}#`;
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -174,7 +176,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
 
       const referenceInfo =
         mode === 'deposit'
-          ? `Sender: ${cleanSender} → To: ${RECIPIENT_NAME} (${DEPOSIT_PHONE})`
+          ? `Sender: ${cleanSender} → To: ${depositRecipient.name} (${depositRecipient.phone})`
           : recipient;
 
       // Pass requested withdrawal amount (or deposit amount) directly to transaction handler
@@ -513,12 +515,12 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                         Recipient Name
                       </span>
                       <span className="text-[15px] font-black tracking-wide text-amber-300 block font-mono">
-                        {RECIPIENT_NAME}
+                        {depositRecipient.name}
                       </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleCopy(RECIPIENT_NAME, 'name')}
+                      onClick={() => handleCopy(depositRecipient.name, 'name')}
                       className="p-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                       title="Copy Name"
                     >
@@ -534,15 +536,15 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                   <div className="flex items-center justify-between border-t border-amber-500/15 pt-2">
                     <div>
                       <span className="text-[10.5px] text-slate-400 block font-medium">
-                        MTN Phone Number
+                        {activeTab === 'mtn' ? 'MTN' : 'Airtel'} Phone Number
                       </span>
                       <span className="text-[14px] font-black text-white font-mono block">
-                        {DEPOSIT_PHONE}
+                        {depositRecipient.phone}
                       </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleCopy(DEPOSIT_PHONE, 'phone')}
+                      onClick={() => handleCopy(depositRecipient.phone, 'phone')}
                       className="p-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                       title="Copy Phone Number"
                     >
@@ -627,7 +629,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                       <div>
                         <span>Enter Recipient Number: </span>
                         <strong className="font-mono text-amber-300 bg-amber-500/20 px-1 py-0.5 rounded font-bold">
-                          {DEPOSIT_PHONE}
+                          {depositRecipient.phone}
                         </strong>
                       </div>
                     </div>
@@ -651,7 +653,7 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                       <div>
                         <span>Confirm that the recipient name shows </span>
                         <strong className="text-amber-300 bg-amber-500/20 px-1 py-0.5 rounded font-extrabold">
-                          {RECIPIENT_NAME}
+                          {depositRecipient.name}
                         </strong>
                         <span>, then enter your PIN to authorize.</span>
                       </div>

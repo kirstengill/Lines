@@ -304,11 +304,24 @@ export const supabaseAdmin = {
   },
 
   // ---------- CLAIM INVESTMENT YIELD (atomic via claim_reward RPC) ----------
-  async claimInvestmentYield(userMachineId: string): Promise<{ success: boolean; claimedUGX?: number; newBalance?: number; error?: string }> {
+  async claimInvestmentYield(userMachineId: string): Promise<{
+    success: boolean;
+    claimedUGX?: number;
+    newBalance?: number;
+    lockUntil?: string;
+    error?: string;
+    reason?: string;
+  }> {
     const sb = getSupabaseClient();
     if (!sb) {
       const res = await apiClient.claimInvestmentYield(userMachineId);
-      return { success: !res.error, claimedUGX: res.claimedUGX, newBalance: res.wallet?.totalBalanceUGX, error: res.error };
+      return {
+        success: !res.error,
+        claimedUGX: res.claimedUGX,
+        newBalance: res.wallet?.totalBalanceUGX,
+        lockUntil: res.investment?.lockUntil,
+        error: res.error,
+      };
     }
 
     try {
@@ -327,6 +340,7 @@ export const supabaseAdmin = {
         success: true,
         claimedUGX: Number(data.claimed_ugx || 0),
         newBalance: Number(data.new_balance || 0),
+        lockUntil: data.lock_until ? String(data.lock_until) : undefined,
       };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to claim yield' };

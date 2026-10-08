@@ -159,7 +159,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         setLoading(false);
         return;
       }
-      setSuccessMsg('Account created successfully! Your UGX 4,000 Welcome Bonus has been credited to your wallet.');
+      setSuccessMsg('Account created successfully! Your UGX 5,000 Welcome Bonus has been credited to your wallet.');
       setTimeout(() => {
         onAuthSuccess(res.user!, res.data);
       }, 600);
@@ -324,18 +324,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           ) : (
             /* SIGN UP / REGISTER FORM */
             <form onSubmit={handleSignUpSubmit} className="space-y-3.5">
-              {/* Starter Bonus Banner (UGX 4,000 Guaranteed) */}
+              {/* Starter Bonus Banner (UGX 5,000 Guaranteed) */}
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-center gap-2.5">
                 <Gift className="w-5 h-5 text-amber-400 shrink-0" />
                 <div>
                   <div className="text-[12px] font-extrabold text-amber-300 flex items-center gap-1">
-                    UGX 4,000 Starting Credit Included
+                    UGX 5,000 Starting Credit Included
                     <span className="text-[9px] bg-amber-500/25 text-amber-200 px-1.5 py-0.2 rounded-full font-bold">
                       AUTOMATIC
                     </span>
                   </div>
                   <p className="text-[11px] text-amber-200/70 leading-snug">
-                    New accounts receive <span className="font-bold text-amber-300">UGX 4,000</span> directly in their wallet upon registration.
+                    New accounts receive <span className="font-bold text-amber-300">UGX 5,000</span> directly in their wallet upon registration.
                   </p>
                 </div>
               </div>
@@ -517,7 +517,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   <div className="w-5 h-5 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Create Account & Claim UGX 4,000</span>
+                    <span>Create Account & Claim UGX 5,000</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

@@ -182,7 +182,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                 : 'text-slate-400 hover:text-amber-200'
             }`}
           >
-            Sign Up (UGX 4,000 Bonus)
+            Sign Up (UGX 5,000 Bonus)
           </button>
         </div>
 
@@ -205,7 +205,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5 flex items-center gap-2">
                   <Gift className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="text-[11px] font-bold text-emerald-200">
-                    UGX 4,000 Welcome Bonus is credited straight to your wallet the moment you
+                    UGX 5,000 Welcome Bonus is credited straight to your wallet the moment you
                     register.
                   </span>
                 </div>
@@ -312,7 +312,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuthSuccess, in
                 ? 'Processing...'
                 : tab === 'signin'
                 ? 'Sign In to Dashboard'
-                : 'Create Account & Claim UGX 4,000'}
+                : 'Create Account & Claim UGX 5,000'}
             </button>
           </form>
         </div>

@@ -80,14 +80,14 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
           "• Quick Airtel USSD: *185*1*1*0766495353*[AMOUNT]#";
       } else if (lower.includes('withdraw') || lower.includes('cash out') || lower.includes('fee') || lower.includes('minimum')) {
         reply = "Withdrawal Guidelines:\n\n" +
-          "• Welcome Bonus: UGX 4,000 is credited directly to your wallet the moment you register — no deposit required to unlock it.\n" +
+          "• Welcome Bonus: UGX 5,000 is credited directly to your wallet the moment you register — no deposit required to unlock it.\n" +
           "• Minimum Standard Withdrawal: UGX 10,000.\n" +
           "• Standard Transaction Fee: 15% processing fee.\n" +
           "• Channels: MTN MoMo, Airtel Money, or Stanbic Bank.\n" +
           "• Approvals: Requests are reviewed by administrators and dispatched directly to your mobile money number or bank account.";
       } else if (lower.includes('referral') || lower.includes('invite') || lower.includes('commission') || lower.includes('bonus') || lower.includes('friend')) {
         reply = "FleetVest Referral Program & Welcome Bonus:\n\n" +
-          "• Welcome Bonus: Every new account is credited UGX 4,000 straight to their wallet balance at registration!\n" +
+          "• Welcome Bonus: Every new account is credited UGX 5,000 straight to their wallet balance at registration!\n" +
           "• Referral Commission: You earn 20% commission on every approved deposit made by users who register using your referral link/code!\n" +
           "• Example: If your invited partner deposits UGX 100,000 and it is approved, you receive UGX 20,000 directly into your wallet.";
       } else if (lower.includes('harvest') || lower.includes('claim') || lower.includes('reward') || lower.includes('yield') || lower.includes('return') || lower.includes('payout')) {

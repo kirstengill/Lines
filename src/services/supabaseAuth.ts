@@ -307,7 +307,7 @@ class AuthService {
     }
 
     const accountData = serverRes.data || {
-      wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+      wallet: { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
@@ -388,7 +388,7 @@ class AuthService {
             this.setCurrentUser(profile, authData.session.access_token);
             const dataRes = await this.refreshUserData();
             const userData = dataRes.data || {
-              wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+              wallet: { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
               transactions: [],
               machines: [],
               adminTasks: [],
@@ -418,7 +418,7 @@ class AuthService {
     }
 
     const userData = serverRes.data || {
-      wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+      wallet: { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
       transactions: [],
       machines: [],
       adminTasks: [],
@@ -663,7 +663,7 @@ class AuthService {
       if (serverRes && !serverRes.error && serverRes.user) {
         this.currentUser = serverRes.user;
         const userData: UserAccountData = serverRes.data || {
-          wallet: serverRes.wallet || { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+          wallet: serverRes.wallet || { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
           transactions: serverRes.transactions || [],
           machines: serverRes.machines || [],
           adminTasks: serverRes.adminTasks || [],

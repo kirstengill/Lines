@@ -59,7 +59,7 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                 </span>
               ) : (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-amber-400" /> UGX 4,000 Bonus Active
+                  <CheckCircle2 className="w-3 h-3 text-amber-400" /> UGX 5,000 Bonus Active
                 </span>
               )}
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1C2230] text-slate-300 border border-amber-500/20">

@@ -1,22 +1,33 @@
 import { Machine } from '../types';
 
+export function getRemainingLockDays(lockUntil?: string | null, now = Date.now()): number {
+  if (!lockUntil) return 0;
+
+  const lockUntilMs = new Date(lockUntil).getTime();
+  if (!Number.isFinite(lockUntilMs)) return 0;
+
+  return Math.max(0, Math.ceil((lockUntilMs - now) / 86400000));
+}
+
 export function computeReturnStatus(input: {
   createdAt?: string | null;
   lockUntil?: string | null;
   dailyRewardUGX: number;
   totalMinedUGX: number;
   lastClaimedAt?: string | null;
+  now?: number;
 }): {
   accruedRewardsUGX: number;
   unclaimedRewardsUGX: number;
   returnStatus: NonNullable<Machine['returnStatus']>;
 } {
-  const created = input.createdAt ? new Date(input.createdAt).getTime() : Date.now();
-  const days = Math.max(0, Math.floor((Date.now() - created) / 86400000));
+  const now = input.now ?? Date.now();
+  const created = input.createdAt ? new Date(input.createdAt).getTime() : now;
+  const days = Math.max(0, Math.floor((now - created) / 86400000));
   const accruedRewardsUGX = Math.round(days * (input.dailyRewardUGX || 0));
   const unclaimedRewardsUGX = Math.max(0, accruedRewardsUGX - (input.totalMinedUGX || 0));
   const lockUntilMs = input.lockUntil ? new Date(input.lockUntil).getTime() : 0;
-  const locked = Boolean(lockUntilMs && Date.now() < lockUntilMs);
+  const locked = Boolean(lockUntilMs && now < lockUntilMs);
 
   let returnStatus: NonNullable<Machine['returnStatus']> = 'accruing';
   if (locked) {

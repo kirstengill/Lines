@@ -300,7 +300,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
               createdAt: new Date().toISOString(),
             },
             data: {
-              wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+              wallet: { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
               transactions: [],
               machines: [],
               adminTasks: [],
@@ -401,7 +401,7 @@ app.post('/api/auth/signin', async (req: Request, res: Response) => {
           serverDatabase[data.user.id] = {
             user: userProfile,
             data: {
-              wallet: { totalBalanceUGX: 4000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
+              wallet: { totalBalanceUGX: 5000, dailyPnlUGX: 0, activeMachinesCount: 0, pendingTasksCount: 0 },
               transactions: [],
               machines: [],
               adminTasks: [],
@@ -549,10 +549,12 @@ app.post('/api/auth/signup', async (req: Request, res: Response) => {
     createdAt: new Date().toISOString(),
   };
 
-  // Initial user data with automatic UGX 4,000 welcome credit
+  const welcomeBonusUGX = systemSettingsDatabase.welcomeBonusUGX;
+
+  // Initial user data with the configured welcome credit
   const initialUserData = {
     wallet: {
-      totalBalanceUGX: 4000,
+      totalBalanceUGX: welcomeBonusUGX,
       dailyPnlUGX: 0,
       activeMachinesCount: 0,
       pendingTasksCount: 0,
@@ -564,13 +566,13 @@ app.post('/api/auth/signup', async (req: Request, res: Response) => {
         username: cleanUsername,
         userFullName: newUser.fullName,
         type: 'reward',
-        amountUGX: 4000,
+        amountUGX: welcomeBonusUGX,
         currency: 'UGX',
         date: 'Just now',
         timestamp: Date.now(),
         status: 'completed',
-        description: 'New User Starting Balance (UGX 4,000 Welcome Credit)',
-        txHash: `0x${Math.random().toString(16).substring(2, 10)}...4000`,
+        description: `New User Starting Balance (UGX ${welcomeBonusUGX.toLocaleString()} Welcome Credit)`,
+        txHash: `0x${Math.random().toString(16).substring(2, 10)}...welcome`,
       },
     ],
     machines: [],
@@ -579,7 +581,7 @@ app.post('/api/auth/signup', async (req: Request, res: Response) => {
       {
         id: `notif_welcome_${Date.now()}`,
         title: 'Welcome Bonus Credited',
-        message: 'UGX 4,000 starting credit deposited into your consolidated wallet.',
+        message: `UGX ${welcomeBonusUGX.toLocaleString()} starting credit deposited into your consolidated wallet.`,
         timestamp: 'Just now',
         read: false,
         type: 'success',
@@ -1508,7 +1510,7 @@ let systemSettingsDatabase = {
   minDepositUGX: 15000,
   withdrawalFeeRate: 0.15,
   dailyRewardRate: 0.05,
-  welcomeBonusUGX: 4000,
+  welcomeBonusUGX: 5000,
   investmentLockDays: 60,
   updatedAt: new Date().toISOString(),
   updatedBy: 'system',
@@ -1530,7 +1532,7 @@ async function loadSystemSettingsFromSupabase() {
         minWithdrawUGX: Number(data.min_withdraw_ugx ?? data.minWithdrawUGX ?? 10000),
         minDepositUGX: Number(data.min_deposit_ugx ?? data.minDepositUGX ?? 15000),
         withdrawalFeeRate: Number(data.withdrawal_fee_rate ?? data.withdrawalFeeRate ?? 0.15),
-        welcomeBonusUGX: Number(data.welcome_bonus_ugx ?? data.welcomeBonusUGX ?? 4000),
+        welcomeBonusUGX: Number(data.welcome_bonus_ugx ?? data.welcomeBonusUGX ?? 5000),
         dailyRewardRate: Number(data.daily_reward_rate ?? data.dailyRewardRate ?? 0.05),
         investmentLockDays: Number(data.investment_lock_days ?? data.investmentLockDays ?? 60),
         updatedAt: data.updated_at ?? data.updatedAt ?? new Date().toISOString(),
@@ -1661,6 +1663,8 @@ app.post('/api/user/investments/buy', requireAuth, (req: Request, res: Response)
   record.data.wallet.activeMachinesCount = (record.data.wallet.activeMachinesCount || 0) + 1;
   record.data.wallet.dailyPnlUGX = (record.data.wallet.dailyPnlUGX || 0) + (dailyRewardUGX || 0);
 
+  const lockDays = Math.max(0, Math.round(systemSettingsDatabase.investmentLockDays));
+  const investedAt = new Date();
   const newInvestment = {
     id: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     userId: userId,
@@ -1673,6 +1677,9 @@ app.post('/api/user/investments/buy', requireAuth, (req: Request, res: Response)
     estYearlyROI: estYearlyROI || 125,
     minInvestUGX: cost,
     amountInvestedUGX: cost,
+    investedAt: investedAt.toISOString(),
+    lockDays,
+    lockUntil: new Date(investedAt.getTime() + lockDays * 86400000).toISOString(),
     investedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     period: '365 Days / Continuous Sovereign Yield',
     hashrate: hashrate || '50.0 TH/s',
@@ -1763,7 +1770,17 @@ app.post('/api/user/investments/:id/claim', requireAuth, (req: Request, res: Res
     return res.status(404).json({ error: 'Investment node not found.' });
   }
 
-  const unclaimed = investment.unclaimedRewardsUGX || 0;
+  const now = Date.now();
+  const currentLockUntil = investment.lockUntil ? new Date(investment.lockUntil).getTime() : 0;
+  if (currentLockUntil && now < currentLockUntil) {
+    return res.status(400).json({ error: 'Returns are locked until the investment lock period elapses.' });
+  }
+
+  const investedAt = investment.investedAt ? new Date(investment.investedAt).getTime() : now;
+  const accrued = Math.round(
+    Math.max(0, Math.floor((now - investedAt) / 86400000)) * (investment.dailyRewardUGX || 0)
+  );
+  const unclaimed = Math.max(0, accrued - (investment.totalMinedUGX || 0));
   if (unclaimed <= 0) {
     return res.status(400).json({ error: 'No pending yield to claim right now.' });
   }
@@ -1771,6 +1788,9 @@ app.post('/api/user/investments/:id/claim', requireAuth, (req: Request, res: Res
   record.data.wallet.totalBalanceUGX += unclaimed;
   investment.totalMinedUGX = (investment.totalMinedUGX || 0) + unclaimed;
   investment.unclaimedRewardsUGX = 0;
+  investment.accruedRewardsUGX = accrued;
+  investment.lastClaimedAt = new Date(now).toISOString();
+  investment.lockUntil = new Date(now + Math.max(0, investment.lockDays || 0) * 86400000).toISOString();
 
   record.data.transactions.unshift({
     id: `tx_claim_${Date.now()}`,

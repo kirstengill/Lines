@@ -3,11 +3,15 @@ import { X, ShieldCheck, ArrowUpRight, RotateCw, Truck, Clock, Activity, CheckCi
 import confetti from 'canvas-confetti';
 import { Machine } from '../types';
 import { ProjectImage } from './ProjectImage';
+import { computeReturnStatus, getRemainingLockDays } from '../services/investmentStatus';
 
 interface ManageMachineModalProps {
   machine: Machine | null;
   onClose: () => void;
-  onClaimReward: (machineId: string, amountUGX: number) => void;
+  onClaimReward: (
+    machineId: string,
+    amountUGX: number
+  ) => Promise<{ success: boolean; lockUntil?: string }>;
   onToggleBoost: (machineId: string) => void;
   onToggleStatus: (machineId: string) => void;
 }
@@ -21,31 +25,47 @@ export const ManageMachineModal: React.FC<ManageMachineModalProps> = ({
 }) => {
   if (!machine) return null;
 
-  const [liveReward, setLiveReward] = useState(machine.unclaimedRewardsUGX || 0);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const [lockUntil, setLockUntil] = useState(machine.lockUntil);
+  const [totalMinedUGX, setTotalMinedUGX] = useState(machine.totalMinedUGX || 0);
 
-  // Simulate real-time returns streaming for active transport operations
   useEffect(() => {
-    if (machine.status !== 'Active') return;
-    const interval = setInterval(() => {
-      setLiveReward((prev) => prev + Math.floor(Math.random() * 45 + 15));
-    }, 1500);
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
-  }, [machine.status]);
+  }, []);
 
-  const handleClaim = () => {
-    if (liveReward <= 0) return;
+  const remainingLockDays = getRemainingLockDays(lockUntil, now);
+  const returnStatus = computeReturnStatus({
+    createdAt: machine.investedAt,
+    lockUntil,
+    dailyRewardUGX: machine.dailyRewardUGX,
+    totalMinedUGX,
+    lastClaimedAt: machine.lastClaimedAt,
+    now,
+  });
+  const liveReward = returnStatus.unclaimedRewardsUGX;
+
+  const handleClaim = async () => {
+    if (remainingLockDays > 0 || liveReward <= 0 || isClaiming) return;
     setIsClaiming(true);
-    confetti({
-      particleCount: 80,
-      spread: 60,
-      origin: { y: 0.6 },
-    });
-    setTimeout(() => {
-      onClaimReward(machine.id, liveReward);
-      setLiveReward(0);
+    try {
+      const result = await onClaimReward(machine.id, liveReward);
+      if (result.success) {
+        setTotalMinedUGX((total) => total + liveReward);
+        setLockUntil(
+          result.lockUntil ||
+            new Date(Date.now() + Math.max(0, machine.lockDays || 0) * 86400000).toISOString()
+        );
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 },
+        });
+      }
+    } finally {
       setIsClaiming(false);
-    }, 600);
+    }
   };
 
   const formattedReward = new Intl.NumberFormat('en-US').format(machine.dailyRewardUGX);
@@ -107,21 +127,40 @@ export const ManageMachineModal: React.FC<ManageMachineModalProps> = ({
           {/* Unclaimed Yield Box */}
           <div className="bg-[#0B192C] rounded-2xl p-4 text-white">
             <div className="flex items-center justify-between text-slate-300 text-xs mb-1">
-              <span>Accumulated Fleet Returns</span>
-              <span className="flex items-center gap-1 text-emerald-400 text-[11px]">
-                <RotateCw className="w-3 h-3 animate-spin" /> Live Accruing
-              </span>
+              <span>{remainingLockDays > 0 ? 'Earned During Lock' : 'Accumulated Fleet Returns'}</span>
+              {remainingLockDays > 0 ? (
+                <span className="text-amber-300 text-[11px]">
+                  Locked · {remainingLockDays} {remainingLockDays === 1 ? 'day' : 'days'} remaining
+                </span>
+              ) : liveReward > 0 ? (
+                <span className="flex items-center gap-1 text-emerald-400 text-[11px]">
+                  <RotateCw className="w-3 h-3" /> Returns claimable
+                </span>
+              ) : (
+                <span className="text-slate-400 text-[11px]">
+                  Accumulating returns
+                </span>
+              )}
             </div>
             <div className="text-2xl font-black font-mono text-emerald-400 mb-3">
               UGX {formattedUnclaimed}
             </div>
+            {remainingLockDays > 0 && (
+              <p className="text-[11px] text-slate-300 mb-3">
+                This accumulated return becomes claimable when the lock reaches 0 days.
+              </p>
+            )}
             <button
               onClick={handleClaim}
-              disabled={isClaiming || liveReward <= 0}
+              disabled={isClaiming || liveReward <= 0 || remainingLockDays > 0}
               className="w-full bg-[#0066FF] hover:bg-blue-600 active:scale-98 disabled:opacity-50 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
             >
               <ArrowUpRight className="w-4 h-4" />
-              {isClaiming ? 'Transferring...' : 'Claim to Main Wallet'}
+              {isClaiming
+                ? 'Transferring...'
+                : remainingLockDays > 0
+                  ? 'Returns Locked'
+                  : 'Claim to Main Wallet'}
             </button>
           </div>
 
@@ -188,4 +227,3 @@ export const ManageMachineModal: React.FC<ManageMachineModalProps> = ({
     </div>
   );
 };
-

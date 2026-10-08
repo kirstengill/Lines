@@ -320,7 +320,12 @@ class ApiClient {
   }
 
   public async claimInvestmentYield(investmentId: string) {
-    return this.request<{ success: boolean; claimedUGX: number; wallet: WalletState; investment: any }>(
+    return this.request<{
+      success: boolean;
+      claimedUGX: number;
+      wallet: WalletState;
+      investment: { lockUntil?: string };
+    }>(
       `/api/user/investments/${investmentId}/claim`,
       { method: 'POST' }
     );

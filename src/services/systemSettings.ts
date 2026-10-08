@@ -7,7 +7,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   minWithdrawUGX: 10000,
   minDepositUGX: 15000,
   withdrawalFeeRate: 0.15,
-  welcomeBonusUGX: 4000,
+  welcomeBonusUGX: 5000,
   dailyRewardRate: 0.05,
   investmentLockDays: 60,
 };

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- 2. WALLETS TABLE
 CREATE TABLE IF NOT EXISTS public.wallets (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    total_balance_ugx NUMERIC DEFAULT 4000 NOT NULL,
+    total_balance_ugx NUMERIC DEFAULT 5000 NOT NULL,
     daily_pnl_ugx NUMERIC DEFAULT 0 NOT NULL,
     active_machines_count INTEGER DEFAULT 0 NOT NULL,
     pending_tasks_count INTEGER DEFAULT 0 NOT NULL,
@@ -187,7 +187,7 @@ BEGIN
         full_name = EXCLUDED.full_name,
         updated_at = now();
 
-    -- Insert Initial Wallet with UGX 4,000 Welcome Bonus
+    -- Insert Initial Wallet with UGX 5,000 Welcome Bonus
     INSERT INTO public.wallets (
         user_id,
         total_balance_ugx,
@@ -196,7 +196,7 @@ BEGIN
         pending_tasks_count
     ) VALUES (
         new.id,
-        4000,
+        5000,
         0,
         0,
         0
@@ -217,10 +217,10 @@ BEGIN
         'tx_welcome_' || new.id::text,
         new.id,
         'bonus',
-        4000,
+        5000,
         'UGX',
         'completed',
-        'Welcome Signup Bonus — UGX 4,000 credited to your wallet',
+        'Welcome Signup Bonus — UGX 5,000 credited to your wallet',
         true,
         timezone('utc'::text, now())
     ) ON CONFLICT (id) DO NOTHING;
@@ -237,7 +237,7 @@ BEGIN
         'notif_welcome_' || new.id,
         new.id,
         'Welcome to FleetVest',
-        'Your registration was successful! UGX 4,000 welcome bonus has been credited to your wallet balance.',
+        'Your registration was successful! UGX 5,000 welcome bonus has been credited to your wallet balance.',
         false,
         'success'
     ) ON CONFLICT DO NOTHING;

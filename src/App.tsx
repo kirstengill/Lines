@@ -252,10 +252,13 @@ export default function App() {
   });
 
   // Action Handlers
-  const handleClaimReward = async (machineId: string, amountUGX: number) => {
+  const handleClaimReward = async (
+    machineId: string,
+    amountUGX: number
+  ): Promise<{ success: boolean; lockUntil?: string }> => {
     if (isBlocked) {
       alert('Your account is currently restricted. Please contact support.');
-      return;
+      return { success: false };
     }
     // Supabase is authoritative: claim_reward RPC atomically zeroes unclaimed
     // rewards, credits the wallet and records the transaction + notification.
@@ -264,6 +267,7 @@ export default function App() {
       alert(res?.error || 'Failed to claim reward.');
     }
     await handleRefreshUserData();
+    return { success: Boolean(res?.success), lockUntil: res?.lockUntil };
   };
 
   const handleToggleBoost = (machineId: string) => {
