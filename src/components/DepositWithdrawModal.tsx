@@ -22,7 +22,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { WHATSAPP_HELP_URL } from '../constants/links';
+import { WHATSAPP_CONTACT_PHONE, WHATSAPP_HELP_URL } from '../constants/links';
 import { authService } from '../services/supabaseAuth';
 import { systemSettingsService } from '../services/systemSettings';
 import { SystemSettings } from '../types';
@@ -738,11 +738,13 @@ export const DepositWithdrawModal: React.FC<DepositWithdrawModalProps> = ({
                 href={WHATSAPP_HELP_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Contact support on WhatsApp at ${WHATSAPP_CONTACT_PHONE}`}
                 className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
               >
                 <MessageCircle className="w-3.5 h-3.5 text-amber-400" />
                 <span>
-                  Need help with {mode === 'deposit' ? 'depositing' : 'withdrawing'}? Chat on WhatsApp
+                  Need help with {mode === 'deposit' ? 'depositing' : 'withdrawing'}? WhatsApp{' '}
+                  {WHATSAPP_CONTACT_PHONE}
                 </span>
                 <ExternalLink className="w-3 h-3 text-amber-400" />
               </a>

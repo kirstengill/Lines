@@ -1,1 +1,2 @@
-export const WHATSAPP_HELP_URL = 'https://chat.whatsapp.com/HMTrPvLyrQH4MhD5lZVD11?s=cl&p=i&mlu=4';
+export const WHATSAPP_CONTACT_PHONE = '0707292508';
+export const WHATSAPP_HELP_URL = `https://wa.me/256${WHATSAPP_CONTACT_PHONE.slice(1)}`;

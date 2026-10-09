@@ -44,15 +44,15 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
     setIsTyping(true);
 
     setTimeout(() => {
-      let reply = "Our support team is here to assist! You can ask about our fleet investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 10,000), or join our official WhatsApp Helpdesk & Community.";
+      let reply = "Our support team is here to assist! You can ask about our fleet investment plans (starting from UGX 15,000), MTN MoMo deposits to 0766495353, withdrawals (min UGX 10,000), or contact us on WhatsApp.";
 
       const lower = text.toLowerCase();
 
       if (lower.includes('whatsapp') || lower.includes('chat') || lower.includes('human') || lower.includes('agent') || lower.includes('desk') || lower.includes('group')) {
-        reply = "You can contact our live support desk and community on WhatsApp anytime!\n\n" +
-          "Official WhatsApp Help & Community Link:\n" +
+        reply = "You can contact our live support team on WhatsApp anytime!\n\n" +
+          "WhatsApp Support:\n" +
           WHATSAPP_HELP_URL + "\n\n" +
-          "Tap the 'Join WhatsApp Helpdesk' banner at the top of this modal to open WhatsApp directly.";
+          "Tap the WhatsApp banner at the top of this modal to open a direct chat.";
       } else if (lower.includes('plan') || lower.includes('tier') || lower.includes('catalog') || lower.includes('invest') || lower.includes('cost') || lower.includes('price') || lower.includes('asset') || lower.includes('vehicle')) {
         reply = "Here is our current FleetVest Logistics Asset catalog:\n\n" +
           "• Boda Delivery Express: UGX 15,000 → UGX 3,500/day\n" +
@@ -144,7 +144,7 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ onClose }) =
             </div>
             <div>
               <span className="text-[12px] font-extrabold text-emerald-900 block leading-tight">
-                WhatsApp Support & Community
+                WhatsApp Support
               </span>
               <span className="text-[10px] text-emerald-700">Instant direct assistance</span>
             </div>
