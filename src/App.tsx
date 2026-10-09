@@ -57,6 +57,8 @@ const EMPTY_ACCOUNT_DATA: UserAccountData = {
   notifications: [],
 };
 
+const CATALOG_REFRESH_INTERVAL_MS = 30_000;
+
 // Single source of truth for role-based routing. Administrator access comes
 // ONLY from profiles.is_admin, so every sign-in path (Supabase, Express
 // fallback, session restore) resolves to the same destination.
@@ -180,12 +182,23 @@ export default function App() {
     }
 
     restore();
-    loadCatalog();
 
     return () => {
       isMounted = false;
     };
-  }, [loadCatalog, applyAccountData]);
+  }, [applyAccountData]);
+
+  useEffect(() => {
+    void loadCatalog();
+
+    if (!user?.id || viewMode === 'auth') return;
+
+    const interval = setInterval(() => {
+      void loadCatalog();
+    }, CATALOG_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [loadCatalog, user?.id, viewMode]);
 
   // Periodic background synchronization with central backend for cross-device updates
   useEffect(() => {
@@ -659,7 +672,10 @@ export default function App() {
 
         {investingMachine && (
           <InvestmentPurchaseModal
-            machine={investingMachine}
+            machine={
+              catalogMachines.find((machine) => machine.id === investingMachine.id) ||
+              investingMachine
+            }
             userBalanceUGX={wallet.totalBalanceUGX}
             onClose={() => setInvestingMachine(null)}
             onConfirmInvest={handleConfirmInvest}
